@@ -5,7 +5,7 @@ import { toCSV, validateImport, defaultState, saveState } from '../store.js';
 import { ENGINE_VERSION } from '../engine.js';
 import { esc, fmtDate, todayStr } from '../util.js';
 
-export const APP_VERSION = '1.7';
+export const APP_VERSION = '1.8';
 
 const isStandalone = () => matchMedia('(display-mode: standalone)').matches || navigator.standalone === true;
 

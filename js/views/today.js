@@ -2,7 +2,7 @@
 
 import { app, openSheet, closeSheet, toast, goalColor } from '../ctx.js';
 import { sortedCats, catLabel } from './categories.js';
-import { dayScore, effectiveTarget, evaluate, versionFor } from '../engine.js';
+import { dayScore, effectiveTarget, evaluate, versionFor, optionWorth } from '../engine.js';
 import { getRec, setRec } from '../store.js';
 import { esc, addDays, fmtDate } from '../util.js';
 import { fmtValue, targetShort, targetText, statusLabel, pct, fmtNum } from '../format.js';
@@ -75,10 +75,13 @@ function progressBar(item) {
 }
 
 function rowMeta(item, cfg) {
-  const st = statusLabel(item);
+  const st = cfg.partMode === 'best' && item.met && (item.credit ?? 0) < 1 ? { text: 'Done', cls: 'partial' } : statusLabel(item);
   const parts = item.parts?.length;
   let val = '';
-  if (parts) {
+  if (parts && cfg.partMode === 'best') {
+    const name = (pid) => partMeta(item.goal, pid).name;
+    val = item.chosen ? `${name(item.chosen)} done` : `Do one: ${item.parts.map((p) => name(p.partId)).join(' or ')}`;
+  } else if (parts) {
     if (item.total != null) val = item.totalTarget ? `${fmtValue(item.total, item.parts[0].cfg, { unit: false })} / ${fmtValue(item.totalTarget, item.parts[0].cfg)}` : fmtValue(item.total, item.parts[0].cfg);
     else val = `${item.parts.filter((p) => p.logged && p.ev?.met).length} of ${item.parts.filter((p) => p.counted).length} parts met`;
   } else if (cfg.kind !== 'check') {
@@ -98,10 +101,10 @@ function goalRow(item, ro) {
   const cfg = item.version;
   const color = goalColor(g, app.state.goals.indexOf(g));
   const parts = item.parts || [];
-  const open = app.ui.expanded[g.id];
+  const open = app.ui.expanded[g.id] ?? cfg.partMode === 'best';
   let controls;
   if (parts.length) {
-    controls = `<button class="expand${open ? ' open' : ''}" data-a="expand" data-g="${g.id}" aria-label="Show parts">${open ? '▾' : '▸'}</button>`;
+    controls = `<button class="expand${open ? ' open' : ''}" data-a="expand" data-g="${g.id}" data-open="${open ? 1 : 0}" aria-label="Show options">${open ? '▾' : '▸'}</button>`;
   } else {
     const r = getRec(app.state, app.ui.date, g.id);
     controls = valueControl(item, cfg, null, r?.value, item.status === 'logged', ro);
@@ -112,7 +115,8 @@ function goalRow(item, ro) {
       const meta = partMeta(g, p.partId);
       const st = p.excused ? { text: 'Excused', cls: 'excused' } :
         p.logged ? (p.ev?.hasTarget ? statusLabel({ ...p.ev, status: 'logged', hasTarget: true }) : { text: 'Logged', cls: 'logged' }) : { text: p.cfg.optional ? 'Optional' : '', cls: 'pending' };
-      const ts = p.cfg.kind === 'check' ? '' : targetShort(p.cfg, app.ui.date);
+      const ts = (p.cfg.kind === 'check' ? '' : targetShort(p.cfg, app.ui.date)) +
+        (cfg.partMode === 'best' ? `${p.cfg.kind === 'check' ? '' : ' · '}worth ${Math.round(optionWorth(p.cfg) * 100)}%` : '');
       return `<div class="part-row">
         <button class="g-main" data-a="entry" data-g="${g.id}" data-p="${p.partId}">
           <span class="g-text"><span class="g-name">${esc(meta.name)}</span>
@@ -121,12 +125,12 @@ function goalRow(item, ro) {
         ${valueControl(item, p.cfg, p.partId, p.record?.value, p.logged, ro)}
       </div>`;
     }).join('')}
-    ${ro ? '' : `<div class="part-actions"><button class="link" data-a="fillAll" data-g="${g.id}">✓ Fill all parts</button></div>`}
+    ${ro || cfg.partMode === 'best' ? '' : `<div class="part-actions"><button class="link" data-a="fillAll" data-g="${g.id}">✓ Fill all parts</button></div>`}
     </div>`;
   }
   return `<div class="goal-row" style="--gc:${color}">
     <div class="row-top">
-      <button class="g-main" data-a="${parts.length ? 'expand' : 'entry'}" data-g="${g.id}">
+      <button class="g-main" data-a="${parts.length ? 'expand' : 'entry'}" data-g="${g.id}" data-open="${open ? 1 : 0}">
         ${g.icon ? `<span class="g-icon">${esc(g.icon)}</span>` : '<span class="g-icon"><span class="dot"></span></span>'}
         <span class="g-text"><span class="g-name">${esc(g.name)}${g.pinned ? ' <span class="pin">★</span>' : ''}${item.bonus ? ' <span class="chip exceeded">⭐ Bonus</span>' : ''}</span>${rowMeta(item, cfg)}</span>
       </button>
@@ -362,7 +366,7 @@ function setCheckButtons(v) {
 export const todayActions = {
   dayPrev() { app.ui.date = addDays(app.ui.date, -1); app.render(); },
   dayNext() { if (app.ui.date < app.today) { app.ui.date = addDays(app.ui.date, 1); app.render(); } },
-  expand(el) { app.ui.expanded[el.dataset.g] = !app.ui.expanded[el.dataset.g]; app.render(); },
+  expand(el) { app.ui.expanded[el.dataset.g] = el.dataset.open !== '1'; app.render(); },
   collapse(el) { app.state.collapsed[el.dataset.id] = !app.state.collapsed[el.dataset.id]; app.commit(); },
   toggle(el) {
     const { state, ui } = app;
@@ -469,7 +473,8 @@ export const todayActions = {
         <thead><tr><th>Goal</th><th class="num">Worth</th><th class="num">Earned</th><th class="num">Lost</th></tr></thead>
         <tbody>${regular.map((b) => `<tr>
           <td>${name(b)}
-            ${b.item.parts?.length ? `<div class="muted small">${b.item.parts.filter((p) => p.counted).map((p) => `${esc(partMeta(b.item.goal, p.partId).name)} ${p.excused ? 'excused' : pct(Math.min(1, p.credit || 0))}`).join(' · ')}</div>` : ''}</td>
+            ${b.item.version.partMode === 'best' ? `<div class="muted small">${b.item.chosen ? `${esc(partMeta(b.item.goal, b.item.chosen).name)} done (worth ${Math.round(optionWorth(b.item.parts.find((p) => p.partId === b.item.chosen).cfg) * 100)}%)` : 'No option done'}</div>`
+              : b.item.parts?.length ? `<div class="muted small">${b.item.parts.filter((p) => p.counted).map((p) => `${esc(partMeta(b.item.goal, p.partId).name)} ${p.excused ? 'excused' : pct(Math.min(1, p.credit || 0))}`).join(' · ')}</div>` : ''}</td>
           <td class="num">${b.share.toFixed(1)}</td><td class="num">${b.contribution.toFixed(1)}</td>
           <td class="num ${b.lost > 0.05 ? 'lost' : ''}">${b.lost > 0.05 ? b.lost.toFixed(1) : '—'}</td></tr>`).join('')}
         </tbody>

@@ -178,6 +178,9 @@ export function totalModeAllowed(parts) {
     parts.every((p) => ['atLeast', 'none'].includes(p.target?.type || 'none'));
 }
 
+// An either/or option's worth as a fraction (stored as a percentage).
+export const optionWorth = (pc) => (Number(pc.worth) > 0 ? Math.min(100, Number(pc.worth)) / 100 : 1);
+
 export function goalDay(goal, date, records, today) {
   const v = versionFor(goal, date);
   const active = isActiveOn(goal, date);
@@ -231,8 +234,24 @@ export function goalDay(goal, date, records, today) {
   base.totalTarget = sameUnit ? counted.reduce((a, p) => a + (Number(p.T?.value) || 0), 0) : null;
 
   let credit = null, met = false, exceeded = false;
+  const isChoice = v.partMode === 'best';
+  if (isChoice) {
+    // Either/or: do any one option; the goal earns the best option's credit
+    // times that option's worth (e.g. Workout 100%, Stretch 75%).
+    base.total = null;
+    base.totalTarget = null;
+  }
   if (counted.length) {
-    if (v.partMode === 'total' && totalModeAllowed(partCfgs)) {
+    if (isChoice) {
+      let best = 0, bestPart = null;
+      for (const p of counted) {
+        const c = Math.min(1, p.credit || 0) * optionWorth(p.cfg);
+        if (c > best || (c === best && !bestPart && p.logged)) { best = c; bestPart = p; }
+      }
+      credit = best;
+      met = counted.some((p) => p.logged && p.ev?.met);
+      base.chosen = bestPart && bestPart.logged ? bestPart.partId : null;
+    } else if (v.partMode === 'total' && totalModeAllowed(partCfgs)) {
       const ev = evaluate(
         { kind: 'number', target: { type: 'atLeast', value: base.totalTarget }, credit: v.credit, cap: v.cap },
         base.total, null);

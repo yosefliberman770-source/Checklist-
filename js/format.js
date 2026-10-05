@@ -90,7 +90,9 @@ export function scheduleText(s) {
 export function describe(cfg, { includeWeight = true } = {}) {
   const parts = cfg.parts || [];
   let what;
-  if (parts.length) {
+  if (parts.length && cfg.partMode === 'best') {
+    what = 'Either/or: ' + (parts.map((p) => `${p.name || '…'}${Number(p.worth) && Number(p.worth) !== 100 ? ` (${p.worth}%)` : ''}`).join(' or '));
+  } else if (parts.length) {
     const names = parts.map((p) => p.name).filter(Boolean);
     what = `${parts.length} part${parts.length > 1 ? 's' : ''}${names.length ? ` (${names.join(', ')})` : ''}`;
   } else if (cfg.kind === 'check') what = 'Mark it done';
@@ -99,7 +101,7 @@ export function describe(cfg, { includeWeight = true } = {}) {
     what = t === 'no target' ? `Track ${cfg.kind === 'duration' ? 'time' : unitOf(cfg) || 'a number'} (no target)` : cap(t);
   }
   const bits = [`${what} ${scheduleText(cfg.schedule)}`];
-  if (parts.length) bits.push(cfg.partMode === 'total' ? 'only the total counts' : 'each part counts');
+  if (parts.length && cfg.partMode !== 'best') bits.push(cfg.partMode === 'total' ? 'only the total counts' : 'each part counts');
   const overrides = Object.entries(cfg.dayTargets || {}).filter(([, v]) => v !== '' && v != null);
   if (overrides.length && !parts.length) bits.push(`different target on ${overrides.map(([d]) => DAY_SHORT[d]).join(', ')}`);
   if (!parts.length && cfg.kind !== 'check' && cfg.target?.type !== 'none') {

@@ -194,11 +194,12 @@ export function renderCategoryPage({ goalListRow }) {
     </div>
     <div class="row-btns cat-actions">
       <button class="btn primary" data-a="nav" data-href="#new/${isNone ? 'none' : c.id}">+ New goal here</button>
-      ${c && others.length ? `<button class="btn" data-a="catAddExisting" data-id="${c.id}">Add existing goals</button>` : ''}
+      <button class="btn" data-a="nav" data-href="#new/${isNone ? 'none' : c.id}/choice">+ Either/or here</button>
     </div>
+    ${c && others.length ? `<div class="center"><button class="link small" data-a="catAddExisting" data-id="${c.id}">+ Add goals you already have</button></div>` : ''}
     <section class="group">
       ${goals.length ? goals.map((g, i) => goalListRow(g, goals, i, { scope: catId || 'none', item: itemFor(g) })).join('')
-        : `<div class="empty-cat muted">No goals in ${c ? esc(c.name) : 'here'} yet. Tap <b>+ New goal here</b>${c && others.length ? ' or <b>Add existing goals</b>' : ''}.</div>`}
+        : `<div class="empty-cat muted">No goals in ${c ? esc(c.name) : 'here'} yet. Tap <b>+ New goal here</b>, or <b>+ Either/or here</b> for a goal where you pick one of several options.</div>`}
     </section>
     ${archived.length ? `<details class="group"><summary>Archived <span class="muted">${archived.length}</span></summary>
       ${archived.map((g, i) => goalListRow(g, archived, i)).join('')}</details>` : ''}

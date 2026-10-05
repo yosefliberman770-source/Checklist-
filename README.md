@@ -52,6 +52,9 @@ you pick. It works even when the app is closed; delete the event to stop it.
 - **Day score** = weighted average of each scheduled goal's credit (0–100%). Unscheduled goals never
   count as failures; excused goals and skipped days are left out; a missing entry is a miss — never a 0
   value that accidentally "meets" a *no more than* goal. Tap the score for the exact breakdown.
+- **Either/or goals.** One goal, several options, do any one: e.g. *Exercise* = Workout 10 min (worth 100%)
+  **or** Stretch 10 min (worth 75%). The goal earns the best option you did. Make one with
+  *How is it measured? → Either / or*, or **+ Either/or here** inside a category.
 - **Bonus goals.** Set *In your day score → ⭐ Bonus*: doing it adds points, skipping it never costs
   any, and the day still tops out at 100%.
 - **Consistency.** Stats ranks your goals from most to least consistent (how often each was met on its

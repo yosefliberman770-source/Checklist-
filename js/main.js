@@ -4,7 +4,7 @@ import { app, closeSheet, go } from './ctx.js';
 import { loadState, requestPersistence } from './store.js';
 import { todayStr, esc } from './util.js';
 import { renderToday, todayActions, todayChange, todayInput, todaySubmit } from './views/today.js';
-import { renderEditor, editorActions, editorSubmit, editorBind, newDraft, draftFromGoal } from './views/editor.js';
+import { renderEditor, editorActions, editorSubmit, editorBind, newDraft, draftFromGoal, applyChoicePreset } from './views/editor.js';
 import { renderGoals, renderGoalDetail, goalActions, goalSubmit, goalListRow } from './views/goals.js';
 import { categoryActions, categorySubmit, renderCategoryPage } from './views/categories.js';
 import { renderStats, statsActions, statsChange } from './views/stats.js';
@@ -42,7 +42,7 @@ app.render = render;
 
 function onRoute() {
   const h = location.hash.replace(/^#/, '') || 'today';
-  const [route, param] = h.split('/');
+  const [route, param, extra] = h.split('/');
   const prevRoute = app.ui.route;
   if (!views[route]) { go('#today'); return; }
   if (route === 'today') app.ui.date = param && /^\d{4}-\d{2}-\d{2}$/.test(param) ? (param > app.today ? app.today : param) : app.today;
@@ -50,6 +50,7 @@ function onRoute() {
     app.ui.draft = newDraft();
     if (param && app.state.categories.some((c) => c.id === param)) app.ui.draft.categoryId = param;
     if (param) app.ui.draft._returnTo = `#cat/${param}`;
+    if (extra === 'choice') applyChoicePreset(app.ui.draft);
   }
   if (route === 'edit') {
     const g = app.state.goals.find((x) => x.id === param);

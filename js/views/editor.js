@@ -16,8 +16,16 @@ const PRESETS = [
   { id: 'percent', label: 'Percentage', kind: 'number', unit: '%', precision: 0 },
   { id: 'distance', label: 'Distance', kind: 'number', unit: 'km', precision: 2 },
   { id: 'custom', label: 'Custom number', kind: 'number', unit: '', precision: 2 },
+  { id: 'choice', label: 'Either / or — do one of several options', kind: 'check' },
 ];
 const PRESET_UNITS = PRESETS.map((p) => p.unit).filter(Boolean);
+
+function newOption(worth) {
+  return {
+    partId: uid(), name: '', step: '', kind: 'check', unit: '', precision: 0, allowNegative: false,
+    target: blankTarget(), credit: 'partial', weight: 2, optional: false, worth,
+  };
+}
 
 const TARGET_TYPES = [
   { id: 'atLeast', label: 'At least' },
@@ -31,6 +39,7 @@ const MEANING_KEYS = ['kind', 'unit', 'precision', 'allowNegative', 'target', 'd
   'weight', 'scored', 'bonus', 'bonusPoints', 'schedule', 'parts', 'partMode', 'partWeighting'];
 
 function guessPreset(cfg) {
+  if (cfg.partMode === 'best' && (cfg.parts || []).length) return 'choice';
   if (cfg.kind === 'check') return 'check';
   if (cfg.kind === 'duration') return 'time';
   const u = (cfg.unit || '').trim();
@@ -140,10 +149,13 @@ export function configFromDraft(d) {
     }
   }
   if (d.parts.length) {
+    const choice = d.partMode === 'best';
     cfg.parts = d.parts.map((p) => ({
-      partId: p.partId, ...cleanMeasure(p), weight: Number(p.weight) > 0 ? Number(p.weight) : 2, optional: !!p.optional,
+      partId: p.partId, ...cleanMeasure(p), weight: Number(p.weight) > 0 ? Number(p.weight) : 2,
+      optional: choice ? false : !!p.optional,
+      ...(choice ? { worth: Math.max(1, Math.min(100, Math.round(Number(p.worth) || 100))) } : {}),
     }));
-    cfg.partMode = d.partMode === 'total' && totalModeAllowed(cfg.parts) ? 'total' : 'each';
+    cfg.partMode = choice ? 'best' : d.partMode === 'total' && totalModeAllowed(cfg.parts) ? 'total' : 'each';
     cfg.partWeighting = d.partWeighting === 'equal' ? 'equal' : 'target';
     if (cfg.partMode === 'total') cfg.credit = d.credit === 'all' ? 'all' : 'partial';
   }
@@ -192,7 +204,15 @@ function validateMeasure(m, label) {
 function validate(d) {
   const errs = [];
   if (!d.name.trim()) errs.push('Give the goal a name.');
-  if (d.parts.length) {
+  if (d.partMode === 'best') {
+    if (d.parts.length < 2) errs.push('Add at least two options to choose between.');
+    d.parts.forEach((p, i) => {
+      if (!p.name.trim()) errs.push(`Option ${i + 1}: give it a name.`);
+      const w = Number(p.worth);
+      if (!(w >= 1 && w <= 100)) errs.push(`${p.name || `Option ${i + 1}`}: worth must be between 1% and 100%.`);
+      errs.push(...validateMeasure(p, p.name || `Option ${i + 1}`));
+    });
+  } else if (d.parts.length) {
     d.parts.forEach((p, i) => {
       if (!p.name.trim()) errs.push(`Part ${i + 1}: give it a name.`);
       errs.push(...validateMeasure(p, p.name || `Part ${i + 1}`));
@@ -308,6 +328,28 @@ function dayTargetFields(d) {
     }).join('')}</div></details>`;
 }
 
+function optionCard(p, i, d) {
+  const pre = `parts.${i}.`;
+  return `<div class="part-card option-card">
+    <div class="part-head">
+      <span class="opt-num">${i + 1}</span>
+      <input type="text" data-bind="${pre}name" value="${val(p.name)}" placeholder="${i === 0 ? 'e.g. Workout' : i === 1 ? 'e.g. Stretch' : 'Option name'}">
+      <button type="button" class="icon-btn" data-a="edPartMove" data-i="${i}" data-d="-1" aria-label="Move up" ${i === 0 ? 'disabled' : ''}>↑</button>
+      <button type="button" class="icon-btn danger-text" data-a="edPartRemove" data-i="${i}" aria-label="Remove option" ${d.parts.length <= 2 ? 'disabled' : ''}>✕</button>
+    </div>
+    <div class="inline">${measureSelect(pre + 'kind', p.kind)}
+      ${p.kind === 'number' ? `<input type="text" class="unit-in" data-bind="${pre}unit" value="${val(p.unit)}" placeholder="unit (reps, km…)">` : ''}</div>
+    ${p.kind !== 'check' ? targetFields(p, pre) : ''}
+    ${p.kind !== 'check' && p.target.type !== 'none' ? `<label class="field compact"><span>Partial progress</span>
+      <select data-bind="${pre}credit" data-rr><option value="partial"${p.credit !== 'all' ? ' selected' : ''}>Partial credit</option><option value="all"${p.credit === 'all' ? ' selected' : ''}>All or nothing</option></select></label>` : ''}
+    <div class="field compact"><span>Worth if you choose this</span>
+      <div class="inline worth-row">
+        <span class="inline-num"><input type="text" inputmode="numeric" data-bind="${pre}worth" value="${val(p.worth)}" aria-label="Worth percent"><span class="unit">%</span></span>
+        ${[100, 75, 50, 25].map((n) => `<button type="button" class="chip-btn${Number(p.worth) === n ? ' on' : ''}" data-a="edSet" data-path="${pre}worth" data-v="${n}">${n}%</button>`).join('')}
+      </div></div>
+  </div>`;
+}
+
 function partCard(p, i, d) {
   const sameUnit = partsShareUnit(d.parts);
   const showWeight = d.partMode !== 'total' && (d.partWeighting === 'equal' || !sameUnit);
@@ -380,7 +422,8 @@ function previewHtml(d) {
 export function renderEditor() {
   const d = app.ui.draft;
   if (!d) { go('#goals'); return ''; }
-  const hasParts = d.parts.length > 0;
+  const isChoice = d.partMode === 'best';
+  const hasParts = d.parts.length > 0 && !isChoice;
   const sameUnit = partsShareUnit(d.parts);
   const totalOk = totalModeAllowed(configFromDraft(d).parts);
   return `<div class="topbar">
@@ -394,7 +437,12 @@ export function renderEditor() {
       <label class="field"><span>Name</span>
         <input type="text" data-bind="name" value="${val(d.name)}" placeholder="e.g. Reading, Sleep, Workout" ${d.isNew ? 'autofocus' : ''}></label>
 
-      ${hasParts ? '<div class="field"><span>How is it measured?</span><p class="muted small">By its parts (below).</p></div>' : `
+      ${isChoice ? `<div class="field"><span>How is it measured?</span>
+        <select data-bind="preset" data-rr>${PRESETS.map((p) => `<option value="${p.id}"${p.id === 'choice' ? ' selected' : ''}>${p.label}</option>`).join('')}</select></div>
+      <div class="field"><span>Options <em class="muted">(do any one)</em></span>
+        <p class="muted small">Each day, do whichever option you like. The goal earns the best option you did, times its worth — e.g. Workout 100%, Stretch 75%.</p>
+        ${d.parts.map((p, i) => optionCard(p, i, d)).join('')}
+        <button type="button" class="btn block" data-a="edOptAdd">+ Add option</button></div>` : hasParts ? '<div class="field"><span>How is it measured?</span><p class="muted small">By its parts (below).</p></div>' : `
       <div class="field"><span>How is it measured?</span>
         <select data-bind="preset" data-rr>${PRESETS.map((p) => `<option value="${p.id}"${p.id === d.preset ? ' selected' : ''}>${p.label}</option>`).join('')}</select>
         ${d.kind === 'number' ? `<input type="text" class="unit-in" data-bind="unit" value="${val(d.unit)}" placeholder="Unit (optional): pages, glasses, km…">` : ''}
@@ -509,7 +557,17 @@ function getPath(obj, path) {
   return path.split('.').reduce((o, k) => (o == null ? undefined : o[k]), obj);
 }
 
+export const applyChoicePreset = (d) => applyPreset(d, 'choice');
+
 function applyPreset(d, id) {
+  if (id === 'choice') {
+    d.preset = 'choice';
+    d.kind = 'check';
+    if (d.partMode !== 'best' || !d.parts.length) d.parts = [newOption(100), newOption(75)];
+    d.partMode = 'best';
+    return;
+  }
+  if (d.preset === 'choice' || d.partMode === 'best') { d.parts = []; d.partMode = 'each'; d.preset = 'check'; }
   const prev = PRESETS.find((p) => p.id === d.preset);
   const p = PRESETS.find((x) => x.id === id);
   d.preset = id;
@@ -728,6 +786,11 @@ export const editorActions = {
   edRemoveDate(el) {
     const s = app.ui.draft.schedule;
     s.dates = s.dates.filter((x) => x !== el.dataset.d);
+    app.render();
+  },
+  edOptAdd() {
+    const d = app.ui.draft;
+    d.parts.push(newOption(50));
     app.render();
   },
   edPartAdd() {

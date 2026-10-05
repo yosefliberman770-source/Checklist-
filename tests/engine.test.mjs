@@ -260,3 +260,28 @@ test('bonus goals add fixed points: done adds, skipped never lowers, capped', ()
   assert.equal(dayScore(s, D2, TODAY).score, 1);
   assert.equal(dayScore(st([x], recs), D2, TODAY).score, null);
 });
+
+test('either/or goal: best option times its worth', () => {
+  const ex = goal('ex', {
+    kind: 'number', partMode: 'best',
+    parts: [
+      { partId: 'w', kind: 'duration', target: { type: 'atLeast', value: 10 }, credit: 'partial', worth: 100 },
+      { partId: 's', kind: 'duration', target: { type: 'atLeast', value: 10 }, credit: 'partial', worth: 75 },
+    ],
+  });
+  const D2 = '2026-10-03';
+  close(goalDay(ex, D, { [recKey(D, 'ex', 'w')]: rec(10) }, TODAY).credit, 1);
+  const st2 = goalDay(ex, D, { [recKey(D, 'ex', 's')]: rec(10) }, TODAY);
+  close(st2.credit, 0.75);
+  assert.equal(st2.met, true);
+  assert.equal(st2.chosen, 's');
+  // half a workout (50%) loses to a full stretch (75%)
+  close(goalDay(ex, D, { [recKey(D, 'ex', 'w')]: rec(5), [recKey(D, 'ex', 's')]: rec(10) }, TODAY).credit, 0.75);
+  // nothing done on a past day = missed
+  const none = goalDay(ex, D2, {}, TODAY);
+  assert.equal(none.status, 'missed');
+  assert.equal(none.credit, 0);
+  // in the day score it weighs like any goal
+  const a = goal('a', { kind: 'check' });
+  close(dayScore(st([a, ex], { [recKey(D, 'a')]: rec(true), [recKey(D, 'ex', 's')]: rec(10) }), D, TODAY).score, 0.875);
+});
