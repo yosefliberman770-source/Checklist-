@@ -106,15 +106,19 @@ function goalRow(item, ro) {
   const color = goalColor(g, app.state.goals.indexOf(g));
   const parts = item.parts || [];
   const open = app.ui.expanded[g.id] ?? cfg.partMode === 'best';
+  const isChoice = cfg.partMode === 'best' && parts.length > 0;
   let controls;
-  if (parts.length) {
+  if (isChoice) {
+    const chosen = item.chosen ? partMeta(g, item.chosen).name : null;
+    controls = `<button class="val choose${chosen ? ' picked' : ''}" data-a="entry" data-g="${g.id}" ${ro}>${chosen ? `✓ ${esc(chosen)}` : 'Choose'}</button>`;
+  } else if (parts.length) {
     controls = `<button class="expand${open ? ' open' : ''}" data-a="expand" data-g="${g.id}" data-open="${open ? 1 : 0}" aria-label="Show options">${open ? '▾' : '▸'}</button>`;
   } else {
     const r = getRec(app.state, app.ui.date, g.id);
     controls = valueControl(item, cfg, null, r?.value, item.status === 'logged', ro);
   }
   let partRows = '';
-  if (parts.length && open) {
+  if (parts.length && open && !isChoice) {
     partRows = `<div class="parts">${parts.map((p) => {
       const meta = partMeta(g, p.partId);
       const st = p.excused ? { text: 'Excused', cls: 'excused' } :
@@ -134,7 +138,7 @@ function goalRow(item, ro) {
   }
   return `<div class="goal-row" style="--gc:${color}">
     <div class="row-top">
-      <button class="g-main" data-a="${parts.length ? 'expand' : 'entry'}" data-g="${g.id}" data-open="${open ? 1 : 0}">
+      <button class="g-main" data-a="${parts.length && !isChoice ? 'expand' : 'entry'}" data-g="${g.id}" data-open="${open ? 1 : 0}">
         ${g.icon ? `<span class="g-icon">${esc(g.icon)}</span>` : '<span class="g-icon"><span class="dot"></span></span>'}
         <span class="g-text"><span class="g-name">${esc(g.name)}${g.pinned ? ' <span class="pin">★</span>' : ''}${item.bonus ? ' <span class="chip exceeded">⭐ Bonus</span>' : ''}</span>${rowMeta(item, cfg)}</span>
       </button>
@@ -254,7 +258,7 @@ function openEntry(goalId, partId) {
   const goal = state.goals.find((g) => g.id === goalId);
   const date = ui.date;
   const v = versionFor(goal, date);
-  if (!partId && (v.parts || []).length) return openParentSheet(goal, date);
+  if (!partId && (v.parts || []).length) return v.partMode === 'best' ? openChoiceSheet(goal, date) : openParentSheet(goal, date);
   const cfg = cfgFor(goal, partId, date);
   if (!cfg) return;
   const r = getRec(state, date, goalId, partId) || {};
@@ -304,6 +308,53 @@ function openEntry(goalId, partId) {
       </div>
     </form>`);
   updatePreview();
+}
+
+// Either/or: pick which option you did (and how much, for numbers/time).
+function openChoiceSheet(goal, date) {
+  const v = versionFor(goal, date);
+  const item = dayScore(app.state, date, app.today).all.find((i) => i.goal.id === goal.id);
+  const goalRec = getRec(app.state, date, goal.id) || {};
+  const excused = goalRec.status === 'excused';
+  const chosen = item?.chosen || (v.parts || []).find((pc) => getRec(app.state, date, goal.id, pc.partId)?.value != null)?.partId || null;
+  const options = (v.parts || []).map((pc) => {
+    const r = getRec(app.state, date, goal.id, pc.partId) || {};
+    const fill = fillValue(pc, date);
+    const val = r.value != null && r.value !== true ? Number(r.value) : (fill != null && fill !== true ? fill : '');
+    const tags = [`worth ${Math.round(optionWorth(pc) * 100)}%${optionWorth(pc) > 1 ? ' ⭐' : ''}`];
+    if (optionBonus(pc)) tags.push(`+${optionBonus(pc)} bonus`);
+    let amount = '';
+    if (pc.kind === 'duration') {
+      amount = `<div class="choice-amount"><span class="muted small">How long?</span>
+        <input type="number" inputmode="numeric" min="0" name="h-${pc.partId}" value="${val === '' ? '' : Math.floor(val / 60)}" placeholder="0" aria-label="hours"><span>h</span>
+        <input type="number" inputmode="numeric" min="0" max="59" name="m-${pc.partId}" value="${val === '' ? '' : Math.round(val % 60)}" placeholder="0" aria-label="minutes"><span>m</span>
+        <span class="muted small">target ${esc(targetText(pc, date))}</span></div>`;
+    } else if (pc.kind === 'number') {
+      amount = `<div class="choice-amount"><span class="muted small">How much?</span>
+        <input type="text" inputmode="decimal" name="n-${pc.partId}" value="${val}" placeholder="0" aria-label="amount"><span>${esc(pc.unit || '')}</span>
+        <span class="muted small">target ${esc(targetText(pc, date))}</span></div>`;
+    }
+    return `<label class="choice-card">
+      <input type="radio" name="opt" value="${pc.partId}" ${chosen === pc.partId ? 'checked' : ''}>
+      <span class="choice-body"><span class="choice-name">${esc(partMeta(goal, pc.partId).name)}</span>
+        <span class="muted small">${tags.join(' · ')}</span></span>
+      ${amount}
+    </label>`;
+  }).join('');
+  openSheet(`
+    <div class="sheet-head"><h2>${esc(goal.icon || '')} ${esc(goal.name)}</h2><button class="x" data-a="closeSheet" aria-label="Close">✕</button></div>
+    <p class="muted">${esc(fmtDate(date))} · which one did you do?</p>
+    <form data-submit="choiceSave" data-g="${goal.id}">
+      ${excused ? '<div class="notice">Excused for this day — it won\'t count for or against it.</div>' : ''}
+      <div class="choices">${options}</div>
+      <label class="field"><span>Note (optional)</span>
+        <textarea id="entry-note" rows="2" placeholder="What happened?">${esc(goalRec.note || '')}</textarea></label>
+      <button class="btn primary block" type="submit">Save</button>
+      <div class="row-btns">
+        <button type="button" class="btn" data-a="choiceExcuse" data-g="${goal.id}">${excused ? 'Un-excuse' : 'Excuse'}</button>
+        <button type="button" class="btn danger-text" data-a="choiceClear" data-g="${goal.id}">Clear</button>
+      </div>
+    </form>`);
 }
 
 function openParentSheet(goal, date) {
@@ -414,6 +465,23 @@ export const todayActions = {
     app.commit();
   },
   entry(el) { if (app.ui.date <= app.today) openEntry(el.dataset.g, el.dataset.p); },
+  choiceExcuse(el) {
+    const { state, ui } = app;
+    const r = getRec(state, ui.date, el.dataset.g);
+    const note = document.getElementById('entry-note')?.value ?? r?.note ?? '';
+    if (r?.status === 'excused') setRec(state, ui.date, el.dataset.g, null, { status: 'logged', note });
+    else setRec(state, ui.date, el.dataset.g, null, { status: 'excused', value: null, note });
+    closeSheet();
+    app.commit();
+  },
+  choiceClear(el) {
+    const { state, ui } = app;
+    const goal = state.goals.find((g) => g.id === el.dataset.g);
+    for (const pc of versionFor(goal, ui.date).parts || []) setRec(state, ui.date, goal.id, pc.partId, { status: 'logged', value: null });
+    setRec(state, ui.date, goal.id, null, { status: 'logged', value: null, note: '' });
+    closeSheet();
+    app.commit();
+  },
   entrySetCheck(el) { setCheckButtons(el.dataset.v === '1'); },
   entryAdd(el) {
     const n = Number(el.dataset.n);
@@ -520,6 +588,34 @@ export const todayInput = {
 };
 
 export const todaySubmit = {
+  choiceSave(form) {
+    const { state, ui } = app;
+    const goal = state.goals.find((g) => g.id === form.dataset.g);
+    const v = versionFor(goal, ui.date);
+    const pick = form.querySelector('input[name="opt"]:checked')?.value || null;
+    let value = null;
+    if (pick) {
+      const pc = v.parts.find((x) => x.partId === pick);
+      if (pc.kind === 'check') value = true;
+      else if (pc.kind === 'duration') {
+        const h = form.querySelector(`[name="h-${pick}"]`).value, m = form.querySelector(`[name="m-${pick}"]`).value;
+        value = h === '' && m === '' ? null : (Number(h) || 0) * 60 + (Number(m) || 0);
+      } else {
+        const raw = form.querySelector(`[name="n-${pick}"]`).value.trim().replace(',', '.');
+        value = raw === '' ? null : Number(raw);
+        if (Number.isNaN(value) || (value < 0 && !pc.allowNegative)) { toast('Enter a number for how much you did'); return; }
+      }
+      if (value == null) { toast('Enter how much you did'); return; }
+    }
+    // One choice per day: the picked option gets the value, the others are cleared.
+    for (const pc of v.parts) {
+      setRec(state, ui.date, goal.id, pc.partId, { status: 'logged', value: pc.partId === pick ? value : null });
+    }
+    const goalRec = getRec(state, ui.date, goal.id);
+    setRec(state, ui.date, goal.id, null, { note: form.querySelector('#entry-note').value, status: goalRec?.status === 'excused' && !pick ? 'excused' : 'logged' });
+    closeSheet();
+    app.commit();
+  },
   entrySave(form) {
     const e = readEntry(form);
     if (!e.valid) { updatePreview(); return; }

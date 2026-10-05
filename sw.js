@@ -2,7 +2,7 @@
 // network (bypassing the browser's HTTP cache) and keep a copy; when offline
 // or the network is too slow, fall back to that copy. Bump VERSION whenever
 // app files change.
-const VERSION = 'myday-v10';
+const VERSION = 'myday-v11';
 const FILES = [
   './', './index.html', './manifest.webmanifest', './css/app.css',
   './js/main.js', './js/ctx.js', './js/store.js', './js/engine.js', './js/format.js', './js/util.js', './js/charts.js',

@@ -301,6 +301,18 @@ details.sub > summary { padding: 8px 0; font-weight: 600; cursor: pointer; }
 .part-head input { flex: 1; font-weight: 600; }
 .opt-num { width: 26px; height: 26px; border-radius: 50%; background: var(--accent-soft); color: var(--accent); font-weight: 700; font-size: .85rem; display: inline-flex; align-items: center; justify-content: center; flex: none; }
 .chip-btn.extra:not(.on) { border-color: var(--exceeded); color: var(--exceeded); }
+.choices { display: flex; flex-direction: column; gap: 8px; margin: 12px 0; }
+.choice-card { display: grid; grid-template-columns: auto 1fr; align-items: center; gap: 4px 12px; padding: 12px 14px;
+  border: 1.5px solid var(--line); border-radius: 14px; background: var(--surface); cursor: pointer; }
+.choice-card input[type="radio"] { width: 22px; height: 22px; margin: 0; accent-color: var(--accent); }
+.choice-card:has(input:checked) { border-color: var(--accent); background: var(--accent-soft); }
+.choice-body { display: flex; flex-direction: column; }
+.choice-name { font-weight: 650; font-size: 1.05rem; }
+.choice-amount { grid-column: 1 / -1; display: none; align-items: center; gap: 6px; flex-wrap: wrap; margin-top: 6px; }
+.choice-card:has(input:checked) .choice-amount { display: flex; }
+.choice-amount input { width: 5em; text-align: center; font-size: 1.1rem; font-weight: 650; padding: 8px 6px; }
+.val.choose { color: var(--accent); border-color: var(--accent); font-weight: 600; max-width: 9.5em; overflow: hidden; text-overflow: ellipsis; }
+.val.choose.picked { color: var(--met); border-color: var(--met); }
 .worth-row .inline-num input { width: 4.5em; text-align: center; }
 form.inline { margin-top: 12px; flex-wrap: nowrap; }
 
