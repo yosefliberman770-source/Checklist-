@@ -43,6 +43,7 @@
 }
 
 * { box-sizing: border-box; }
+[hidden] { display: none !important; }
 html { -webkit-text-size-adjust: 100%; }
 body {
   margin: 0; background: var(--bg); color: var(--text);
@@ -378,23 +379,34 @@ form.inline { margin-top: 12px; flex-wrap: nowrap; }
 .back-cat { max-width: 40%; }
 .cat-actions { margin: 12px 0 14px; }
 
-/* ---------- plan ---------- */
-.plan-sum { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; }
-.plan-sum > div { display: flex; flex-direction: column; }
-.plan-sum b { font-size: 1.25rem; font-variant-numeric: tabular-nums; }
-.plan-warn { margin: 10px 0 0; background: var(--missed-soft); color: var(--missed); }
-.plan-row { display: flex; align-items: center; gap: 10px; background: var(--surface); border: 1px solid var(--line);
-  border-radius: var(--radius); padding: 8px 10px; margin-bottom: 8px; box-shadow: var(--shadow); }
-.plan-row.done { opacity: .55; }
-.plan-row.done .plan-name { text-decoration: line-through; }
-.plan-row.late { border-color: var(--missed); }
-.plan-main { flex: 1; min-width: 0; display: flex; flex-direction: column; align-items: flex-start; gap: 2px; background: none; border: 0; text-align: left; padding: 4px 2px; min-height: 44px; }
-.plan-name { font-weight: 600; overflow-wrap: anywhere; }
-.plan-meta { font-size: .85rem; color: var(--muted); }
-.plan-slot { font-size: .8rem; color: var(--accent); font-weight: 600; }
-.plan-late { font-size: .8rem; color: var(--missed); font-weight: 600; }
+/* ---------- schedule (day calendar) ---------- */
+.sched-bar { display: flex; align-items: center; justify-content: space-between; gap: 8px; margin: 0 0 10px; }
+.cal-day { position: relative; margin-left: 58px; border-left: 1px solid var(--line); }
+.cal-day .hour { position: absolute; left: 0; right: 0; height: 60px; border-top: 1px solid var(--line); }
+.hour-label { position: absolute; left: -58px; top: -8px; width: 52px; text-align: right; font-size: .72rem; color: var(--muted); }
+.cal-day .slot { position: absolute; left: 0; right: 0; top: 0; height: 30px; background: none; border: 0; padding: 0; }
+.cal-day .slot.half { top: 30px; border-top: 1px dashed color-mix(in srgb, var(--line) 60%, transparent); }
+.cal-day .slot:active { background: var(--accent-soft); }
+.cal-day .blocks { position: absolute; inset: 0; pointer-events: none; }
+.blk { position: absolute; pointer-events: auto; display: flex; align-items: stretch; gap: 4px; overflow: hidden;
+  background: color-mix(in srgb, var(--bc) 18%, var(--surface)); border: 1px solid color-mix(in srgb, var(--bc) 45%, var(--line));
+  border-left: 4px solid var(--bc); border-radius: 8px; box-shadow: var(--shadow); }
+.blk.done { opacity: .55; }
+.blk.done .blk-name { text-decoration: line-through; }
+.blk-main { flex: 1; min-width: 0; display: flex; flex-direction: column; align-items: flex-start; justify-content: flex-start;
+  background: none; border: 0; padding: 4px 6px; text-align: left; overflow: hidden; }
+.blk-name { font-weight: 650; font-size: .88rem; line-height: 1.2; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; max-width: 100%; }
+.blk-time { font-size: .72rem; color: var(--muted); white-space: nowrap; }
+.blk.short .blk-main { flex-direction: row; align-items: center; gap: 6px; padding-top: 0; padding-bottom: 0; }
+.blk-check { flex: none; width: 30px; height: 30px; margin: 3px 4px 0 0; border-radius: 50%; border: 2px solid color-mix(in srgb, var(--bc) 50%, var(--line));
+  background: var(--surface); color: transparent; font-size: .85rem; }
+.blk.short .blk-check { width: 22px; height: 22px; margin-top: 1px; font-size: .7rem; }
+.blk-check.on { background: var(--met); border-color: var(--met); color: #fff; }
+.now-line { position: absolute; left: -6px; right: 0; height: 0; border-top: 2px solid var(--missed); z-index: 2; pointer-events: none; }
+.now-line span { position: absolute; left: -4px; top: -6px; width: 10px; height: 10px; border-radius: 50%; background: var(--missed); }
 .check.small { width: 38px; height: 38px; font-size: 1.05rem; }
 .dur-input.small input { font-size: 1.3rem; width: 4.5ch; }
+.dur-input.small { margin: 0; }
 
 /* ---------- goals list ---------- */
 .list-row { padding: 6px 8px; }

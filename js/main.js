@@ -7,7 +7,7 @@ import { renderToday, todayActions, todayChange, todayInput, todaySubmit } from 
 import { renderEditor, editorActions, editorSubmit, editorBind, newDraft, draftFromGoal, applyChoicePreset } from './views/editor.js';
 import { renderGoals, renderGoalDetail, goalActions, goalSubmit, goalListRow } from './views/goals.js';
 import { categoryActions, categorySubmit, renderCategoryPage } from './views/categories.js';
-import { renderPlan, planActions, planSubmit, planChange } from './views/plan.js';
+import { renderPlan, planActions, planSubmit, planChange, afterPlanRender } from './views/plan.js';
 import { renderStats, statsActions, statsChange } from './views/stats.js';
 import { renderHistory, historyActions } from './views/history.js';
 import { renderSettings, settingsActions, settingsChange, applySetting, applyTheme } from './views/settings.js';
@@ -65,6 +65,7 @@ function onRoute() {
   closeSheet();
   render();
   if (prevRoute !== route || route === 'goal') window.scrollTo(0, 0);
+  if (route === 'plan') afterPlanRender();
 }
 
 function isTextual(el) {

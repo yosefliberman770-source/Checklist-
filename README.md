@@ -48,10 +48,9 @@ you pick. It works even when the app is closed; delete the event to stop it.
   task counts as done once its target is reached (partial progress is shown but doesn't check it off).
   Excused tasks and skipped days are left out; History and Stats show how much you got done and how
   consistent each task is.
-- **Daily plan.** The Plan tab lists the day's tasks; tap one to set when it needs to be done by and how
-  long it takes (optionally "every day"), and add one-off items. For today it lays out what's left from
-  now, earliest deadline first ("Do it 2:45–3:45 PM"), warns when something won't fit in time, and shows
-  how much free time is left. You can plan up to two weeks ahead.
+- **Daily schedule.** The Schedule tab is a calendar for the day (hours down the side). Tap a time or
+  **+ Add** to place one of your tasks — or anything else, like "Dentist" — with a start time and length;
+  tasks can keep their slot every day they're due. Tap a block to move it, change it or check it off.
 - **Categories like playlists.** The Goals tab shows your categories as cards (e.g. 📚 Reading) or all
   goals in one list. Open a category to see its goals, add a new goal there, or move existing goals in.
   On Today, categories start folded with their progress (e.g. "Health · 2 of 4 done") — tap to open.
