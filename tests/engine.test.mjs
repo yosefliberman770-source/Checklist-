@@ -18,32 +18,6 @@ const st = (goals, records = {}, settings = {}) => ({
 });
 const rec = (value, status = 'logged') => ({ value, status });
 
-test('worked example from the spec scores 81%', () => {
-  const D = '2026-10-04';
-  const goals = [
-    goal('workout', { kind: 'check', weight: 4 }),
-    goal('read', { kind: 'number', unit: 'pages', target: { type: 'atLeast', value: 30 } }),
-    goal('screen', { kind: 'duration', target: { type: 'atMost', value: 120, zero: 240 } }),
-    goal('sleep', { kind: 'duration', weight: 4, target: { type: 'range', low: 420, high: 540, zeroLow: 300 } }),
-    goal('water', { kind: 'number', weight: 1, target: { type: 'atLeast', value: 8 } }),
-  ];
-  const records = {
-    [recKey(D, 'workout')]: rec(true),
-    [recKey(D, 'read')]: rec(15),
-    [recKey(D, 'screen')]: rec(150),
-    [recKey(D, 'sleep')]: rec(390),
-    [recKey(D, 'water')]: rec(10),
-  };
-  const r = dayScore(st(goals, records), D, TODAY);
-  close(r.score, 10.5 / 13);
-  assert.equal(Math.round(r.score * 100), 81);
-  const lost = r.breakdown.reduce((a, b) => a + b.lost, 0);
-  close(lost + r.score * 100, 100);
-  const water = r.items.find((i) => i.goal.id === 'water');
-  assert.equal(water.exceeded, true);
-  assert.equal(water.credit, 1);
-});
-
 test('missing entry on an at-most goal is a miss, not a perfect zero', () => {
   const g = goal('coffee', { kind: 'number', target: { type: 'atMost', value: 2 } });
   const past = goalDay(g, '2026-10-01', {}, TODAY);
@@ -148,18 +122,6 @@ test('versions keep history stable', () => {
   close(goalDay(g, '2026-09-01', recs, TODAY).credit, 0.5);
 });
 
-test('weight change does not rewrite earlier days', () => {
-  const a = goal('a', { kind: 'check', weight: 2 });
-  const b = goal('b', { kind: 'check', weight: 2 });
-  const recs = { [recKey('2026-09-01', 'a')]: rec(true), [recKey('2026-10-02', 'a')]: rec(true) };
-  const s = st([a, b], recs);
-  close(dayScore(s, '2026-09-01', TODAY).score, 0.5);
-  const cfg = { ...a.versions[0], weight: 8 }; delete cfg.id; delete cfg.from;
-  applyVersion(a, cfg, '2026-10-01', 'v2');
-  close(dayScore(s, '2026-09-01', TODAY).score, 0.5);
-  close(dayScore(s, '2026-10-02', TODAY).score, 0.8);
-});
-
 test('schedules, pauses, archive and unscheduled days', () => {
   const g = goal('gym', { kind: 'check', schedule: { type: 'weekdays', days: [1, 3, 5] } });
   assert.equal(isScheduled(g, '2026-10-05'), true); // Mon
@@ -192,12 +154,6 @@ test('excused goals leave both sides of the fraction', () => {
   const b = goal('b', { kind: 'check' });
   const recs = { [recKey(D, 'a')]: rec(true), [recKey(D, 'b')]: rec(null, 'excused') };
   assert.equal(dayScore(st([a, b], recs), D, TODAY).score, 1);
-});
-
-test('bonus credit never pushes the day above 100%', () => {
-  const a = goal('a', { kind: 'number', target: { type: 'atLeast', value: 10 }, cap: 2 });
-  const recs = { [recKey(D, 'a')]: rec(50) };
-  assert.equal(dayScore(st([a], recs), D, TODAY).score, 1);
 });
 
 test('period average is the mean of daily scores', () => {
@@ -233,34 +189,6 @@ test('consistency ranking: most to least consistent, with too-little-data last',
   close(r.rows[0].delta, 1); // 0% in the previous 4 days → 100% now
 });
 
-test('bonus goals add fixed points: done adds, skipped never lowers, capped', () => {
-  const a = goal('a', { kind: 'check', weight: 2 });
-  const b = goal('b', { kind: 'check', weight: 2 });
-  const x = goal('x', { kind: 'check', weight: 8, bonus: true, bonusPoints: 5 });
-  const y = goal('y', { kind: 'check', bonus: true }); // default +2
-  const D2 = '2026-10-03';
-  const recs = { [recKey(D, 'a')]: rec(true), [recKey(D2, 'a')]: rec(true), [recKey(D2, 'x')]: rec(true) };
-  const s = st([a, b, x, y], recs);
-  const skip = dayScore(s, D, TODAY);
-  close(skip.score, 0.5);
-  assert.equal(skip.scheduledCount, 2);
-  // +5 points regardless of importance or how few regular goals there are
-  const done = dayScore(s, D2, TODAY);
-  close(done.score, 0.55);
-  close(done.bonusPoints, 5);
-  recs[recKey(D2, 'y')] = rec(true);
-  close(dayScore(s, D2, TODAY).score, 0.57);
-  // daily cap
-  s.settings.bonusCap = 3;
-  close(dayScore(s, D2, TODAY).score, 0.53);
-  s.settings.bonusCap = 'none';
-  close(dayScore(s, D2, TODAY).bonusPoints, 7);
-  // never above 100%
-  recs[recKey(D2, 'b')] = rec(true);
-  assert.equal(dayScore(s, D2, TODAY).score, 1);
-  assert.equal(dayScore(st([x], recs), D2, TODAY).score, null);
-});
-
 test('either/or goal: best option times its worth', () => {
   const ex = goal('ex', {
     kind: 'number', partMode: 'best',
@@ -281,101 +209,11 @@ test('either/or goal: best option times its worth', () => {
   const none = goalDay(ex, D2, {}, TODAY);
   assert.equal(none.status, 'missed');
   assert.equal(none.credit, 0);
-  // in the day score it weighs like any goal
+  // in the checklist, doing any option makes the task done
   const a = goal('a', { kind: 'check' });
-  close(dayScore(st([a, ex], { [recKey(D, 'a')]: rec(true), [recKey(D, 'ex', 's')]: rec(10) }), D, TODAY).score, 0.875);
-});
-
-test('either/or option worth over 100% is extra credit, day still capped', () => {
-  const ex = goal('ex', {
-    kind: 'number', partMode: 'best',
-    parts: [
-      { partId: 'w', kind: 'check', worth: 100 },
-      { partId: 'r', kind: 'check', worth: 150 },
-    ],
-  });
-  const a = goal('a', { kind: 'check' });
-  const r = goalDay(ex, D, { [recKey(D, 'ex', 'r')]: rec(true) }, TODAY);
-  close(r.credit, 1.5);
-  assert.equal(r.exceeded, true);
-  // goal a missed: (0 + 1.5) / 2 = 75% — the extra half makes up for part of the miss
-  close(dayScore(st([a, ex], { [recKey(D, 'ex', 'r')]: rec(true) }), D, TODAY).score, 0.75);
-  // both done: capped at 100%
-  assert.equal(dayScore(st([a, ex], { [recKey(D, 'a')]: rec(true), [recKey(D, 'ex', 'r')]: rec(true) }), D, TODAY).score, 1);
-});
-
-test('either/or option can add fixed bonus points (shared daily cap)', () => {
-  const ex = goal('ex', {
-    kind: 'number', partMode: 'best',
-    parts: [
-      { partId: 'w', kind: 'check', worth: 100 },
-      { partId: 's', kind: 'check', worth: 75, bonusPoints: 5 },
-      { partId: 'y', kind: 'check', worth: 0, bonusPoints: 3 },
-    ],
-  });
-  const a = goal('a', { kind: 'check' });
-  const recs = { [recKey(D, 'ex', 's')]: rec(true) };
-  // (0 + 0.75) / 2 = 37.5% + 5 bonus points
-  const d1 = dayScore(st([a, ex], recs), D, TODAY);
-  close(d1.score, 0.425);
-  close(d1.bonusPoints, 5);
-  // a 0%-worth option gives only its bonus points and doesn't count as done
-  const d2 = goalDay(ex, D, { [recKey(D, 'ex', 'y')]: rec(true) }, TODAY);
-  assert.equal(d2.credit, 0);
-  assert.equal(d2.met, false);
-  close(dayScore(st([a, ex], { [recKey(D, 'ex', 'y')]: rec(true) }), D, TODAY).score, 0.03);
-  // every option done adds its bonus; capped by the daily limit
-  const both = { [recKey(D, 'ex', 's')]: rec(true), [recKey(D, 'ex', 'y')]: rec(true) };
-  close(dayScore(st([a, ex], both), D, TODAY).bonusPoints, 8);
-  close(dayScore(st([a, ex], both, { bonusCap: 6 }), D, TODAY).bonusPoints, 6);
-});
-
-test('difficulty multiplies a goal\'s points: low priority but hard can outweigh', () => {
-  const easy = goal('e', { kind: 'check', weight: 4 });                 // High, normal difficulty = 4
-  const hard = goal('h', { kind: 'check', weight: 1, difficulty: 2 });  // Low, very hard = 2
-  const big = goal('b', { kind: 'check', weight: 1, difficulty: 2 });
-  assert.equal(goalDay(hard, D, {}, TODAY).weight, 10); // Low (5) very hard → 5 + 5 extra
-  // only the hard one done: 2 / (4 + 2)
-  close(dayScore(st([easy, hard], { [recKey(D, 'h')]: rec(true) }), D, TODAY).score, 2 / 6);
-  // a Low+Very hard goal is worth twice a Low+Normal goal
-  const low = goal('l', { kind: 'check', weight: 1 });
-  close(dayScore(st([low, big], { [recKey(D, 'b')]: rec(true) }), D, TODAY).score, 2 / 3);
-});
-
-test('points mode: points earned toward a daily target, skipped tasks cost nothing', () => {
-  const settings = { scoring: 'points', dailyTarget: 100 };
-  const tasks = [];
-  for (let k = 0; k < 20; k++) tasks.push(goal('t' + k, { kind: 'check', points: 10 }));
-  const hard = goal('h', { kind: 'check', points: 10, extraPoints: 5 });
-  const recs = {};
-  for (let k = 0; k < 7; k++) recs[recKey(D, 't' + k)] = rec(true);
-  // 7 of 20 tasks done = 70 points, even though 210 were possible
-  const d1 = dayScore(st([...tasks, hard], recs, settings), D, TODAY);
-  close(d1.points, 70);
-  close(d1.score, 0.7);
-  close(d1.possible, 215);
-  // the hard task gives its 10 + 5 extra
-  recs[recKey(D, 'h')] = rec(true);
-  close(dayScore(st([...tasks, hard], recs, settings), D, TODAY).points, 85);
-  // going past the target is kept as points but the day score caps at 100%
-  for (let k = 7; k < 12; k++) recs[recKey(D, 't' + k)] = rec(true);
-  const d3 = dayScore(st([...tasks, hard], recs, settings), D, TODAY);
-  close(d3.points, 135);
-  assert.equal(d3.score, 1);
-  // partial progress earns part of the points; bonus points add on top
-  const pages = goal('p', { kind: 'number', points: 20, target: { type: 'atLeast', value: 20 } });
-  const b = goal('b', { kind: 'check', bonus: true, bonusPoints: 3 });
-  const d4 = dayScore(st([pages, b], { [recKey(D, 'p')]: rec(10), [recKey(D, 'b')]: rec(true) }, settings), D, TODAY);
-  close(d4.points, 13);
-  // custom target
-  close(dayScore(st([pages], { [recKey(D, 'p')]: rec(20) }, { scoring: 'points', dailyTarget: 40 }), D, TODAY).score, 0.5);
-});
-
-test('old goals keep the same percent scores under the points model', () => {
-  const hi = goal('hi', { kind: 'check', weight: 4 });
-  const lo = goal('lo', { kind: 'check', weight: 1, difficulty: 1.5 });
-  // weights 4 vs 1.5 → points 20 vs 7.5: same ratio
-  close(dayScore(st([hi, lo], { [recKey(D, 'hi')]: rec(true) }), D, TODAY).score, 4 / 5.5);
+  const ds = dayScore(st([a, ex], { [recKey(D, 'a')]: rec(true), [recKey(D, 'ex', 's')]: rec(10) }), D, TODAY);
+  assert.equal(ds.doneCount, 2);
+  assert.equal(ds.dueCount, 2);
 });
 
 test('weekly quota: available until done N times, missed days never count', () => {
@@ -396,12 +234,12 @@ test('weekly quota: available until done N times, missed days never count', () =
   const today = goalDay(gym, TODAY, recs, TODAY, o);
   assert.equal(today.scheduled, true);
   assert.equal(today.weeklyOptional, true);
-  // points mode: earns points on the days done
-  const s = st([gym], recs, { scoring: 'points', weekStart: 1 });
-  close(dayScore(s, '2026-09-29', TODAY).points, 10);
-  close(dayScore(s, '2026-09-28', TODAY).points, 0);
+  // checklist: counts on the days it's done; skipped days and extras don't count
+  const s = st([gym], recs, { weekStart: 1 });
+  assert.equal(dayScore(s, '2026-09-29', TODAY).doneCount, 1);
+  assert.equal(dayScore(s, '2026-09-28', TODAY).score, null);
   assert.equal(dayScore(s, '2026-10-02', TODAY).score, null);
-  // percent mode: an undone weekly task doesn't pull today's percent down
+  // an undone weekly task doesn't count against today
   const a = goal('a', { kind: 'check' });
   const s2 = st([a, gym], { ...recs, [recKey(TODAY, 'a')]: rec(true) }, { weekStart: 1 });
   assert.equal(dayScore(s2, TODAY, TODAY).score, 1);
@@ -414,4 +252,23 @@ test('weekly quota: optional days are not counted as misses in stats', () => {
   const g = p.goals.find((x) => x.goal.id === 'gym');
   assert.equal(g.scheduled, 2);
   assert.equal(g.met, 2);
+});
+
+test('checklist: the day is how many due tasks were done, each counts the same', () => {
+  const a = goal('a', { kind: 'check', weight: 8 });
+  const b = goal('b', { kind: 'check', weight: 1 });
+  const c = goal('c', { kind: 'number', target: { type: 'atLeast', value: 20 } });
+  const recs = { [recKey(D, 'a')]: rec(true), [recKey(D, 'c')]: rec(10) }; // c only halfway
+  const ds = dayScore(st([a, b, c], recs), D, TODAY);
+  assert.equal(ds.dueCount, 3);
+  assert.equal(ds.doneCount, 1);          // partial progress isn't "done"
+  close(ds.score, 1 / 3);
+  recs[recKey(D, 'c')] = rec(25);
+  assert.equal(dayScore(st([a, b, c], recs), D, TODAY).doneCount, 2);
+  // old bonus goals now count as ordinary tasks
+  const x = goal('x', { kind: 'check', bonus: true });
+  assert.equal(dayScore(st([a, x], recs), D, TODAY).dueCount, 2);
+  // "not counted" goals stay out
+  const t = goal('t', { kind: 'check', scored: false });
+  assert.equal(dayScore(st([a, t], recs), D, TODAY).dueCount, 1);
 });

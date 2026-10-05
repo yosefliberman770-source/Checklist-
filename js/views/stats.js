@@ -57,31 +57,21 @@ export function renderStats() {
   const prev = periodStats(state, addDays(r.from, -len), addDays(r.from, -1), today);
   const delta = ps.average != null && prev.average != null ? ps.average - prev.average : null;
   const thr = Number(state.settings.goodDay) || 80;
-  const pointsMode = state.settings.scoring === 'points';
-  const target = Number(state.settings.dailyTarget) > 0 ? Number(state.settings.dailyTarget) : 100;
-  const sl = (avg100) => (avg100 == null ? '—' : scoreLabel(avg100 / 100, state.settings));
-
-  const lost = ps.goals.filter((g) => g.lost > 0.05).sort((a, b) => b.lost - a.lost);
+  const sl = (avg100) => (avg100 == null ? '—' : scoreLabel(avg100 / 100));
   const wdOrder = state.settings.weekStart === 0 ? [0, 1, 2, 3, 4, 5, 6] : [1, 2, 3, 4, 5, 6, 0];
 
   return `<div class="topbar"><h1>Stats</h1></div>
     ${periodChips()}
     <div class="tiles">
       <div class="tile wide"><div class="tile-num big">${sl(ps.average)}</div>
-        <div class="tile-label">Average day${delta != null ? ` · <span class="${delta >= 0 ? 'up' : 'down'}">${delta >= 0 ? '▲' : '▼'} ${pointsMode ? `${Math.abs(Math.round(delta * target / 100))} pts` : Math.abs(delta).toFixed(0)} vs previous ${len} days</span>` : ''}</div></div>
-      <div class="tile"><div class="tile-num">${ps.goodDays}<span class="of">/${ps.scoredDays}</span></div><div class="tile-label">Good days (≥ ${pointsMode ? `${Math.round(thr * target / 100)} pts` : `${thr}%`})</div></div>
-      <div class="tile"><div class="tile-num">${sl(ps.median)}</div><div class="tile-label">Median day</div></div>
+        <div class="tile-label">of tasks done on an average day${delta != null ? ` · <span class="${delta >= 0 ? 'up' : 'down'}">${delta >= 0 ? '▲' : '▼'} ${Math.abs(delta).toFixed(0)} vs previous ${len} days</span>` : ''}</div></div>
+      <div class="tile"><div class="tile-num">${ps.goodDays}<span class="of">/${ps.scoredDays}</span></div><div class="tile-label">Good days (≥ ${thr}% done)</div></div>
+      <div class="tile"><div class="tile-num">${ps.perfectDays}<span class="of">/${ps.scoredDays}</span></div><div class="tile-label">Days with everything done</div></div>
     </div>
     <p class="muted small">${coverageLine(ps)}</p>
     ${ps.changes.length ? `<div class="notice small">Your system changed during this period: ${ps.changes.slice(0, 5).map((c) => `${esc(c.goal.name)} (${fmtDate(c.date, { weekday: false })})`).join(', ')}${ps.changes.length > 5 ? '…' : ''}. Each day is still scored with the settings it had.</div>` : ''}
 
     ${consistencyCard(consistencyRanking(ps, prev), len)}
-
-    <section class="card"><h3>${pointsMode ? 'Points left on the table' : 'Where your points went'}</h3>
-      ${lost.length ? `<p class="muted small">${pointsMode ? 'Average points per day you could have earned but didn\'t, by task.' : 'Average points lost per day, by goal. Fixing the top one moves your score the most.'}</p>
-        ${hbars(lost.map((g) => ({ label: `${esc(g.goal.icon || '')} ${esc(g.goal.name)}`, value: g.lost, href: `#goal/${g.goal.id}` })), { fmt: (v) => v.toFixed(1) })}`
-        : '<p class="muted small">No points lost in this period. 🎯</p>'}
-    </section>
 
     <section class="card"><h3>By day of the week</h3>
       ${ps.scoredDays ? hbars(wdOrder.map((wd) => ({ label: DAY_SHORT[wd], value: ps.weekdayAvg[wd] ?? 0 })), { max: 100, fmt: (v) => (v ? sl(v) : '—') }) : '<p class="muted small">No scored days yet.</p>'}

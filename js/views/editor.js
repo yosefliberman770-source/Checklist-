@@ -3,10 +3,10 @@
 // applies from a date the user picks, so history keeps its meaning.
 
 import { app, openSheet, closeSheet, toast, go, PALETTE } from '../ctx.js';
-import { WEIGHTS, POINT_LEVELS, EXTRA_LEVELS, basePoints, extraPoints, scoringMode, dailyTarget, goalPoints, MAX_OPTION_WORTH, BONUS_SIZES, DEFAULT_BONUS_POINTS, DEFAULT_BONUS_CAP, applyVersion, evaluate, versionFor, isScheduled, hasTarget, totalModeAllowed, partsShareUnit } from '../engine.js';
-import { describe, pct, statusLabel } from '../format.js';
+import { WEIGHTS, applyVersion, evaluate, totalModeAllowed, partsShareUnit } from '../engine.js';
+import { describe, statusLabel } from '../format.js';
 import { sortedCats, catLabel, findCatByName, createCategory } from './categories.js';
-import { esc, uid, deepClone, DAY_SHORT, DAY_LONG, addDays, weekday, fmtDate } from '../util.js';
+import { esc, uid, deepClone, DAY_SHORT, DAY_LONG, addDays, fmtDate } from '../util.js';
 
 const PRESETS = [
   { id: 'check', label: 'Done / not done', kind: 'check' },
@@ -36,7 +36,7 @@ const TARGET_TYPES = [
 ];
 
 const MEANING_KEYS = ['kind', 'unit', 'precision', 'allowNegative', 'target', 'dayTargets', 'credit', 'cap',
-  'points', 'extraPoints', 'scored', 'bonus', 'bonusPoints', 'schedule', 'parts', 'partMode', 'partWeighting'];
+  'scored', 'schedule', 'parts', 'partMode', 'partWeighting'];
 
 function guessPreset(cfg) {
   if (cfg.partMode === 'best' && (cfg.parts || []).length) return 'choice';
@@ -66,7 +66,7 @@ export function newDraft() {
     isNew: true, name: '', shortName: '', description: '', notes: '', icon: '', color: '', categoryId: '',
     pinned: false, step: '', start: app.today, end: '', preset: 'check',
     kind: 'check', unit: '', precision: 0, allowNegative: false, target: blankTarget(), dayTargets: {},
-    credit: 'partial', cap: 1, weight: 2, points: 10, extraPoints: 0, scored: true, bonus: false, bonusPoints: DEFAULT_BONUS_POINTS,
+    credit: 'partial', cap: 1, weight: 2, scored: true,
     schedule: { type: 'daily', days: [1, 2, 3, 4, 5], every: 2, times: 3, anchor: '', dates: [] },
     parts: [], partMode: 'each', partWeighting: 'target', _newDate: app.today,
   };
@@ -94,9 +94,6 @@ export function draftFromGoal(goal) {
     const meta = (goal.parts || []).find((x) => x.id === p.partId) || {};
     return { ...p, name: meta.name || '', step: meta.step ?? '', target: { ...blankTarget(), ...(p.target || {}) } };
   });
-  if (!(Number(d.bonusPoints) > 0)) d.bonusPoints = DEFAULT_BONUS_POINTS;
-  d.points = basePoints(v);
-  d.extraPoints = Math.round(extraPoints(v) * 10) / 10;
   delete d.difficulty;
   d.preset = guessPreset(d);
   return d;
@@ -122,7 +119,7 @@ function cleanMeasure(m) {
     precision: m.kind === 'number' ? Math.max(0, Math.min(6, Number(m.precision) || 0)) : 0,
     allowNegative: m.kind === 'number' ? !!m.allowNegative : false,
     target: cleanTarget(m.target, m.kind),
-    credit: m.kind === 'check' ? 'all' : m.credit === 'all' ? 'all' : 'partial',
+    credit: m.kind === 'check' ? 'all' : 'partial',
   };
   return out;
 }
@@ -132,12 +129,7 @@ export function configFromDraft(d) {
   const cfg = {
     ...base,
     dayTargets: {},
-    cap: base.target.type === 'atLeast' && base.credit === 'partial' ? Number(d.cap) || 1 : 1,
-    points: Number(d.points) > 0 ? Number(d.points) : 10,
-    extraPoints: Math.max(0, Number(d.extraPoints) || 0),
     scored: !!d.scored,
-    bonus: !!d.scored && !!d.bonus,
-    ...(d.scored && d.bonus ? { bonusPoints: Number(d.bonusPoints) > 0 ? Number(d.bonusPoints) : DEFAULT_BONUS_POINTS } : {}),
     schedule: cleanSchedule(d.schedule),
     parts: [],
     partMode: 'each',
@@ -158,8 +150,6 @@ export function configFromDraft(d) {
       partId: p.partId, ...cleanMeasure(p), weight: Number(p.weight) > 0 ? Number(p.weight) : 2,
       optional: choice ? false : !!p.optional,
       ...(choice ? {
-        worth: Math.max(0, Math.min(MAX_OPTION_WORTH, Math.round(p.worth === '' || p.worth == null || Number.isNaN(Number(p.worth)) ? 100 : Number(p.worth)))),
-        bonusPoints: Number(p.bonusPoints) > 0 ? Number(p.bonusPoints) : 0,
       } : {}),
     }));
     cfg.partMode = choice ? 'best' : d.partMode === 'total' && totalModeAllowed(cfg.parts) ? 'total' : 'each';
@@ -216,8 +206,6 @@ function validate(d) {
     if (d.parts.length < 2) errs.push('Add at least two options to choose between.');
     d.parts.forEach((p, i) => {
       if (!p.name.trim()) errs.push(`Option ${i + 1}: give it a name.`);
-      const w = Number(p.worth);
-      if (!(w >= 0 && w <= MAX_OPTION_WORTH) || p.worth === '') errs.push(`${p.name || `Option ${i + 1}`}: worth must be between 1% and ${MAX_OPTION_WORTH}%.`);
       errs.push(...validateMeasure(p, p.name || `Option ${i + 1}`));
     });
   } else if (d.parts.length) {
@@ -262,33 +250,6 @@ function targetFields(m, prefix) {
   return `<div class="target-row">
     <select data-bind="${p('type')}" data-rr>${TARGET_TYPES.map((x) => `<option value="${x.id}"${x.id === t.type ? ' selected' : ''}>${x.label}</option>`).join('')}</select>
     ${inputs}</div>`;
-}
-
-function creditFields(m, prefix, { allowCap, noZero = false }) {
-  if (m.kind === 'check' || m.target.type === 'none') return '';
-  const t = m.target;
-  const p = (k) => `${prefix}${k}`;
-  let zero = '';
-  if (noZero) zero = '';
-  else if (m.credit !== 'all') {
-    if (t.type === 'atLeast') zero = `<label class="field"><span>No credit at or below <em class="muted">(default 0)</em></span>${amountInput(m, p('target.zero'), t.zero, '0')}</label>`;
-    if (t.type === 'atMost') zero = `<label class="field"><span>No credit at or above <em class="muted">(default: twice the limit)</em></span>${amountInput(m, p('target.zero'), t.zero, '')}</label>`;
-    if (t.type === 'range' || t.type === 'exact') zero = `<label class="field"><span>Too little: no credit at or below <em class="muted">(default 0)</em></span>${amountInput(m, p('target.zeroLow'), t.zeroLow, '0')}</label>
-      <label class="field"><span>Too much: no credit at or above <em class="muted">(default: as far above as the range is wide)</em></span>${amountInput(m, p('target.zeroHigh'), t.zeroHigh, '')}</label>`;
-    if (t.type === 'exact') zero += `<label class="field"><span>Counts as exact within ±</span>${amountInput(m, p('target.tolerance'), t.tolerance, '0')}</label>`;
-  } else if (t.type === 'exact') {
-    zero = `<label class="field"><span>Counts as exact within ±</span>${amountInput(m, p('target.tolerance'), t.tolerance, '0')}</label>`;
-  }
-  const capSel = allowCap && t.type === 'atLeast' && m.credit !== 'all' ? `<label class="field"><span>Going beyond the target</span>
-    <select data-bind="cap" data-type="num" data-rr>
-      ${[[1, 'Stops at 100% (default)'], [1.25, 'Extra credit up to 125%'], [1.5, 'Extra credit up to 150%'], [2, 'Extra credit up to 200%']]
-        .map(([v, l]) => `<option value="${v}"${Number(m.cap || 1) === v ? ' selected' : ''}>${l}</option>`).join('')}
-    </select></label>` : '';
-  return `<label class="field"><span>Credit for partial progress</span>
-      <select data-bind="${p('credit')}" data-rr>
-        <option value="partial"${m.credit !== 'all' ? ' selected' : ''}>Partial credit — progress counts</option>
-        <option value="all"${m.credit === 'all' ? ' selected' : ''}>All or nothing — only meeting it counts</option>
-      </select></label>${zero}${capSel}`;
 }
 
 function weightSeg(path, value, small = false) {
@@ -352,18 +313,6 @@ function optionCard(p, i, d) {
     <div class="inline">${measureSelect(pre + 'kind', p.kind)}
       ${p.kind === 'number' ? `<input type="text" class="unit-in" data-bind="${pre}unit" value="${val(p.unit)}" placeholder="unit (reps, km…)">` : ''}</div>
     ${p.kind !== 'check' ? targetFields(p, pre) : ''}
-    ${p.kind !== 'check' && p.target.type !== 'none' ? `<label class="field compact"><span>Partial progress</span>
-      <select data-bind="${pre}credit" data-rr><option value="partial"${p.credit !== 'all' ? ' selected' : ''}>Partial credit</option><option value="all"${p.credit === 'all' ? ' selected' : ''}>All or nothing</option></select></label>` : ''}
-    <div class="field compact"><span>Worth if you choose this</span>
-      <div class="inline worth-row">
-        <span class="inline-num"><input type="text" inputmode="numeric" data-bind="${pre}worth" value="${val(p.worth)}" aria-label="Worth percent"><span class="unit">%</span></span>
-        ${[0, 25, 50, 75, 100, 125, 150].map((n) => `<button type="button" class="chip-btn${Number(p.worth) === n ? ' on' : ''}${n > 100 ? ' extra' : ''}" data-a="edSet" data-path="${pre}worth" data-v="${n}">${n}%</button>`).join('')}
-      </div>
-      ${Number(p.worth) > 100 ? `<p class="muted small">⭐ Extra credit: choosing this earns more than a full goal, which can make up for other goals you missed that day. Your day still tops out at 100%.</p>` : ''}
-      ${String(p.worth) === '0' ? `<p class="muted small">0% = this option doesn't complete the goal${Number(p.bonusPoints) > 0 ? '; it only adds its bonus points' : ' (give it bonus points below, or it does nothing)'}.</p>` : ''}</div>
-    <div class="field compact"><span>Bonus points if you do it <em class="muted">(optional)</em></span>
-      <div class="seg small">${[0, ...BONUS_SIZES].map((n) => `<button type="button" class="${(Number(p.bonusPoints) || 0) === n ? 'on' : ''}" data-a="edSet" data-path="${pre}bonusPoints" data-v="${n}">${n ? `+${n}` : 'None'}</button>`).join('')}</div>
-      <p class="muted small">Added on top of the goal's credit, like a bonus goal — counts toward your daily bonus limit.</p></div>
   </div>`;
 }
 
@@ -387,42 +336,10 @@ function partCard(p, i, d) {
   </div>`;
 }
 
-// The goal's share of a typical scheduled day. For a bonus goal: how much it
-// can add on top, relative to the regular goals that day.
-function shareOfDay(d, cfg) {
-  const temp = { id: d.id || '_draft', state: 'active', start: d.start, end: d.end || null, pauses: [], versions: [{ ...cfg, from: d.start }] };
-  for (let k = 0; k < 14; k++) {
-    const date = addDays(app.today, k);
-    if (!isScheduled(temp, date)) continue;
-    let W = cfg.bonus ? 0 : goalPoints(cfg);
-    for (const g of app.state.goals) {
-      if (g.id === d.id || g.state !== 'active') continue;
-      const v = versionFor(g, date);
-      const scoredGoal = v.scored && !v.bonus && v.schedule?.type !== 'anytime' &&
-        (v.parts?.length ? v.parts.some((p) => !p.optional && hasTarget(p)) : hasTarget(v));
-      if (scoredGoal && isScheduled(g, date, v)) W += goalPoints(v);
-    }
-    return { share: W > 0 ? goalPoints(cfg) / W : null, date };
-  }
-  return null;
-}
-
 function summaryHtml(d) {
   const cfg = configFromDraft(d);
   cfg.parts = cfg.parts.map((p, i) => ({ ...p, name: d.parts[i].name }));
   let html = `<div class="summary-sentence">${esc(describe(cfg))}</div>`;
-  const scorable = cfg.scored && cfg.schedule.type !== 'anytime' &&
-    (cfg.parts.length ? cfg.parts.some((p) => !p.optional && hasTarget(p)) : hasTarget(cfg));
-  if (scorable && validate({ ...d, name: d.name || 'x' }).length === 0) {
-    const s = shareOfDay(d, cfg);
-    const day = s ? (s.date === app.today ? 'today\'s' : DAY_LONG[weekday(s.date)] + '\'s') : '';
-    if (cfg.bonus) {
-      const capS = app.state.settings.bonusCap;
-      html += `<div class="muted small">Adds +${cfg.bonusPoints} to your day score when done${capS === 'none' ? '' : ` (all bonuses together: at most +${capS ?? DEFAULT_BONUS_CAP} a day)`}. Skipping it costs nothing.</div>`;
-    } else if (scoringMode(app.state.settings) === 'points') {
-      html += `<div class="muted small">Doing it earns ${goalPoints(cfg)} of your ${dailyTarget(app.state.settings)} daily points.</div>`;
-    } else if (s) html += `<div class="muted small">Worth about ${Math.round(s.share * 100)}% of ${day} score.</div>`;
-  }
   return html;
 }
 
@@ -433,7 +350,7 @@ function previewHtml(d) {
   if (pv != null && pv !== '' && validateMeasure(d, 't').length === 0) {
     const ev = evaluate(configFromDraft(d), Number(pv), app.today);
     const st = statusLabel({ ...ev, status: 'logged', hasTarget: true });
-    out = `→ earns <b>${pct(ev.credit)}</b> <span class="chip ${st.cls}">${st.text}</span>`;
+    out = ev.met ? `→ <b>counts as done</b> <span class="chip ${st.cls}">${st.text}</span>` : `→ not done yet <span class="chip ${st.cls}">${st.text}</span>`;
   }
   return `<div class="preview-row"><span>If you log</span>${d.kind === 'duration' ? durInput('_preview', pv) : numInput('_preview', pv, { unit: d.unit })}<span id="ed-preview-out">${out}</span></div>`;
 }
@@ -459,7 +376,7 @@ export function renderEditor() {
       ${isChoice ? `<div class="field"><span>How is it measured?</span>
         <select data-bind="preset" data-rr>${PRESETS.map((p) => `<option value="${p.id}"${p.id === 'choice' ? ' selected' : ''}>${p.label}</option>`).join('')}</select></div>
       <div class="field"><span>Options <em class="muted">(do any one)</em></span>
-        <p class="muted small">Each day, do whichever option you like. The goal earns the best option you did, times its worth — e.g. Workout 100%, Stretch 75%. Set more than 100% for extra credit.</p>
+        <p class="muted small">Each day, do whichever one you like — doing any of them checks this task off.</p>
         ${d.parts.map((p, i) => optionCard(p, i, d)).join('')}
         <button type="button" class="btn block" data-a="edOptAdd">+ Add option</button></div>` : hasParts ? '<div class="field"><span>How is it measured?</span><p class="muted small">By its parts (below).</p></div>' : `
       <div class="field"><span>How is it measured?</span>
@@ -469,13 +386,6 @@ export function renderEditor() {
       ${d.kind !== 'check' ? `<div class="field"><span>Target</span>${targetFields(d, '')}</div>` : ''}`}
 
       <div class="field"><span>Which days?</span>${scheduleFields(d.schedule)}</div>
-
-      ${d.scored && d.bonus ? `<div class="field"><span>Bonus worth</span>
-        <div class="seg">${BONUS_SIZES.map((n) => `<button type="button" class="${Number(d.bonusPoints) === n ? 'on' : ''}" data-a="edSet" data-path="bonusPoints" data-v="${n}">+${n}</button>`).join('')}</div>
-        <p class="muted small">Points added to your day (out of 100) when you do it.</p></div>`
-      : pointsFields(d)}
-
-      ${scoreModeField(d)}
 
       ${categoryField(d)}
 
@@ -490,7 +400,7 @@ export function renderEditor() {
         <label class="field"><span>Short name</span><input type="text" data-bind="shortName" value="${val(d.shortName)}" placeholder="Used in tight spaces"></label>
         <label class="field"><span>Description</span><textarea data-bind="description" rows="2">${esc(d.description)}</textarea></label>
         <label class="check-field"><input type="checkbox" data-bind="pinned" data-type="bool" ${d.pinned ? 'checked' : ''}> Pin to the top</label>
-        ${hasParts ? '' : creditFields(d, '', { allowCap: true })}
+        <label class="check-field"><input type="checkbox" data-bind="scored" data-type="bool" data-rr ${d.scored ? 'checked' : ''}> <span>Count it in today's progress <span class="muted small">(off = just track it)</span></span></label>
         ${dayTargetFields(d)}
         <div class="grid2">
           <label class="field"><span>Starts</span><input type="date" data-bind="start" value="${val(d.start)}"></label>
@@ -516,7 +426,6 @@ export function renderEditor() {
               <option value="total"${d.partMode === 'total' ? ' selected' : ''} ${totalOk ? '' : 'disabled'}>Only the total counts</option>
             </select>
             <span class="muted small">${d.partMode === 'total' ? 'Extra in one part makes up for another; only the overall total vs. the overall target matters.' : 'Each part only earns credit up to its own target, so extra in one part doesn\'t cover a missed one.'}${totalOk ? '' : ' "Only the total" needs every part in the same unit with an "at least" target.'}</span></label>
-          ${d.partMode === 'total' && totalOk ? creditFields({ kind: 'number', unit: d.parts[0].unit, target: { type: 'atLeast' }, credit: d.credit, cap: d.cap }, '', { allowCap: true, noZero: true }) : ''}
           ${d.partMode !== 'total' && sameUnit ? `<label class="field"><span>Bigger parts count more?</span>
             <select data-bind="partWeighting" data-rr>
               <option value="target"${d.partWeighting !== 'equal' ? ' selected' : ''}>Yes, by target size</option>
@@ -526,34 +435,6 @@ export function renderEditor() {
       </details>` : ''}
     </div>
     ${d.isNew ? '' : `<div class="center"><button class="link" data-a="nav" data-href="#goal/${d.id}">View this goal's history and actions</button></div>`}`;
-}
-
-function pointsFields(d) {
-  const pts = scoringMode(app.state.settings) === 'points';
-  const base = Number(d.points) || 0, extra = Number(d.extraPoints) || 0;
-  const baseCustom = !POINT_LEVELS.some((x) => x.value === base);
-  const extraCustom = !EXTRA_LEVELS.some((x) => x.value === extra);
-  return `<div class="field"><span>${pts ? 'Points for doing it' : 'How much does it count?'}</span>
-      <div class="seg">${POINT_LEVELS.map((x) => `<button type="button" class="${base === x.value ? 'on' : ''}" data-a="edSet" data-path="points" data-v="${x.value}">${x.value}<small> ${x.label}</small></button>`).join('')}</div>
-      <div class="inline small-row"><span class="muted small">or exactly</span>${numInput('points', baseCustom ? d.points : '', { placeholder: String(base || 10), unit: 'points' })}</div>
-      <p class="muted small">${pts ? `What you earn when you do it. Your daily goal is ${dailyTarget(app.state.settings)} points, and skipping a task never takes points away.` : 'Bigger numbers count more in your day.'}</p></div>
-    <div class="field"><span>How hard is it? <em class="muted">(optional)</em></span>
-      <div class="seg">${EXTRA_LEVELS.map((x) => `<button type="button" class="${extra === x.value ? 'on' : ''}" data-a="edSet" data-path="extraPoints" data-v="${x.value}">${x.label}${x.value ? `<small> +${x.value}</small>` : ''}</button>`).join('')}</div>
-      <div class="inline small-row"><span class="muted small">or extra</span>${numInput('extraPoints', extraCustom ? d.extraPoints : '', { placeholder: '0', unit: 'points' })}</div>
-      <p class="muted small">Extra points on top of the regular ones${base ? ` — this goal is worth <b>${base + extra} points</b> in total` : ''}.</p></div>`;
-}
-
-function scoreModeField(d) {
-  const mode = !d.scored ? 'off' : d.bonus ? 'bonus' : 'counts';
-  const help = {
-    counts: 'Missing it lowers your day score.',
-    bonus: 'Doing it adds a few points to your day; skipping it never lowers it. Your day still tops out at 100%.',
-    off: 'Tracked only — it shows in your stats but never affects your score.',
-  }[mode];
-  const btn = (m, l) => `<button type="button" class="${mode === m ? 'on' : ''}" data-a="edScoreMode" data-m="${m}">${l}</button>`;
-  return `<div class="field"><span>In your day score</span>
-    <div class="seg">${btn('counts', 'Counts')}${btn('bonus', '⭐ Bonus')}${btn('off', 'Not counted')}</div>
-    <p class="muted small">${help}</p></div>`;
 }
 
 function categoryField(d) {
@@ -765,13 +646,6 @@ export const editorActions = {
     const d = app.ui.draft;
     const v = el.dataset.v;
     setPath(d, el.dataset.path, /^-?\d+(\.\d+)?$/.test(v) ? Number(v) : v);
-    app.render();
-  },
-  edScoreMode(el) {
-    const d = app.ui.draft;
-    d.scored = el.dataset.m !== 'off';
-    d.bonus = el.dataset.m === 'bonus';
-    if (d.bonus && !(Number(d.bonusPoints) > 0)) d.bonusPoints = DEFAULT_BONUS_POINTS;
     app.render();
   },
   edCat(el) {

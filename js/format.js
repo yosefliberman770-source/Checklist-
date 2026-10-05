@@ -1,6 +1,6 @@
 // Turning numbers and configuration into words the user reads.
 
-import { effectiveTarget, WEIGHTS, DIFFICULTIES, basePoints, extraPoints } from './engine.js';
+import { effectiveTarget, WEIGHTS } from './engine.js';
 import { DAY_SHORT, DAY_LONG, fmtDate } from './util.js';
 
 export function fmtDur(min) {
@@ -59,8 +59,6 @@ export function targetShort(m, date) {
   }
 }
 
-export const difficultyLabel = (v) => DIFFICULTIES.find((x) => x.value === Number(v))?.label || `×${v}`;
-
 export function weightLabel(w) {
   const hit = WEIGHTS.find((x) => x.value === Number(w));
   return hit ? hit.label : `Custom (${w})`;
@@ -91,16 +89,11 @@ export function scheduleText(s) {
 }
 
 // The plain-language sentence shown on every goal.
-export function describe(cfg, { includeWeight = true } = {}) {
+export function describe(cfg) {
   const parts = cfg.parts || [];
   let what;
   if (parts.length && cfg.partMode === 'best') {
-    what = 'Either/or: ' + (parts.map((p) => {
-      const tags = [];
-      if (p.worth !== undefined && p.worth !== '' && Number(p.worth) !== 100) tags.push(`${p.worth}%`);
-      if (Number(p.bonusPoints) > 0) tags.push(`+${p.bonusPoints} bonus`);
-      return `${p.name || '…'}${tags.length ? ` (${tags.join(', ')})` : ''}`;
-    }).join(' or '));
+    what = 'Either/or: ' + parts.map((p) => p.name || '…').join(' or ');
   } else if (parts.length) {
     const names = parts.map((p) => p.name).filter(Boolean);
     what = `${parts.length} part${parts.length > 1 ? 's' : ''}${names.length ? ` (${names.join(', ')})` : ''}`;
@@ -120,12 +113,7 @@ export function describe(cfg, { includeWeight = true } = {}) {
   const scoredPossible = cfg.schedule?.type !== 'anytime' &&
     (parts.length ? parts.some((p) => !p.optional && (p.kind === 'check' || p.target?.type !== 'none')) :
       cfg.kind === 'check' || cfg.target?.type !== 'none');
-  if (!cfg.scored || !scoredPossible) bits.push('not in score');
-  else if (cfg.bonus) bits.push(`⭐ bonus +${Number(cfg.bonusPoints) > 0 ? cfg.bonusPoints : 2}`);
-  else if (includeWeight) {
-    const base = basePoints(cfg), extra = Math.round(extraPoints(cfg) * 10) / 10;
-    bits.push(extra > 0 ? `${fmtNum(base + extra, 1)} points (${fmtNum(base, 1)} + ${fmtNum(extra, 1)} for hard)` : `${fmtNum(base, 1)} points`);
-  }
+  if (!cfg.scored || !scoredPossible) bits.push('just tracked');
   return bits.join(' · ');
 }
 
@@ -136,7 +124,7 @@ export const pct100 = (x, digits = 0) => (x == null ? '—' : `${Number(x).toFix
 
 export function statusLabel(i) {
   if (i.status === 'excused') return { text: 'Excused', cls: 'excused' };
-  if (i.status === 'missed') return i.bonus ? { text: 'Skipped', cls: 'pending' } : { text: 'Missed', cls: 'missed' };
+  if (i.status === 'missed') return { text: 'Not done', cls: 'missed' };
   if (i.status === 'pending') return { text: '', cls: 'pending' };
   if (i.status === 'unscheduled') return { text: '', cls: 'pending' };
   if (i.hasTarget === false) return { text: 'Logged', cls: 'logged' };
@@ -150,13 +138,7 @@ export function statusLabel(i) {
   return { text: 'Nearly there', cls: 'partial' };
 }
 
-// A day score (0..1 of the day, or of the daily points target) in the user's
-// chosen scoring style: "78%" or "78 pts".
-export function scoreLabel(score01, settings) {
-  if (score01 == null) return '—';
-  if (settings?.scoring === 'points') {
-    const target = Number(settings.dailyTarget) > 0 ? Number(settings.dailyTarget) : 100;
-    return `${Math.round(score01 * target)} pts`;
-  }
-  return `${Math.round(score01 * 100)}%`;
+// A day's progress as the share of due tasks done: "78%".
+export function scoreLabel(score01) {
+  return score01 == null ? '—' : `${Math.round(score01 * 100)}%`;
 }

@@ -370,6 +370,10 @@ export function dayHasData(state, date) {
   return false;
 }
 
+// The day is a checklist: every task due that day counts the same, and the
+// day's progress is how many were done (target reached). Partial progress is
+// shown on the task but a task only counts once it's done. Tasks not done
+// on optional days (weekly "any days" tasks) and excused tasks don't count.
 export function dayScore(state, date, today) {
   const day = state.days[date] || {};
   const goals = state.goals.filter((g) => g.state !== 'trash');
@@ -378,77 +382,28 @@ export function dayScore(state, date, today) {
   const extra = all.filter((i) => !i.scheduled && i.status === 'logged');
   const res = {
     date, all, items, extra, score: null, provisional: date === today, future: date > today,
-    skipped: !!day.skipped, untracked: false, weightSum: 0, earned: 0,
-    scheduledCount: 0, metCount: 0, excusedCount: 0, pendingCount: 0, breakdown: [],
+    skipped: !!day.skipped, untracked: false,
+    dueCount: 0, doneCount: 0, scheduledCount: 0, metCount: 0, excusedCount: 0, pendingCount: 0, breakdown: [],
   };
   if (res.future) return res;
-  const scoredItems = items.filter((i) => i.scored);
-  const regularItems = scoredItems.filter((i) => !i.bonus);
-  res.scheduledCount = regularItems.length;
-  res.excusedCount = regularItems.filter((i) => i.status === 'excused').length;
-  res.bonusCount = scoredItems.length - regularItems.length;
-  res.bonusDone = 0;
-  res.bonusPoints = 0;
+  const counting = items.filter((i) => i.scored);
+  res.excusedCount = counting.filter((i) => i.status === 'excused').length;
   if (day.skipped) return res;
   if (state.settings.unloggedDays === 'untracked' && date < today && !dayHasData(state, date)) {
     res.untracked = true;
     return res;
   }
-  // Regular goals set the scale (100%). Bonus goals only add on top of what
-  // was earned, never enter the denominator, and the day stays capped at 100%.
-  const pointsModeEarly = scoringMode(state.settings) === 'points';
-  const counted = regularItems.filter((i) => i.status !== 'excused' && !(i.weeklyOptional && !pointsModeEarly));
-  const bonus = scoredItems.filter((i) => i.bonus && i.status === 'logged');
-  const W = counted.reduce((a, i) => a + i.weight, 0);
-  if (!counted.length || W <= 0) return res;
-  let earned = 0, bonusRaw = 0;
-  for (const i of counted) earned += i.weight * (i.credit || 0);
-  for (const i of bonus) bonusRaw += i.bonusValue * Math.min(1, i.credit || 0);
-  const optionBonusItems = scoredItems.filter((i) => i.status === 'logged' && i.optionBonuses?.length);
-  for (const i of optionBonusItems) for (const b of i.optionBonuses) bonusRaw += b.points;
-  const capSetting = state.settings.bonusCap;
-  const bonusCap = capSetting === 'none' ? Infinity : Number(capSetting ?? DEFAULT_BONUS_CAP);
-  res.weightSum = W;
-  res.earned = earned;
-  res.bonusRaw = bonusRaw;
-  res.bonusCap = bonusCap;
-  res.bonusPoints = Math.min(bonusRaw, bonusCap);
-  res.bonusDone = bonus.filter((i) => (i.credit || 0) > 0).length +
-    optionBonusItems.reduce((a, i) => a + i.optionBonuses.length, 0);
-  const pointsMode = scoringMode(state.settings) === 'points';
-  res.mode = pointsMode ? 'points' : 'percent';
-  res.target = dailyTarget(state.settings);
-  res.possible = W;
-  if (pointsMode) {
-    // Points earned toward the daily target; what you skip just adds nothing.
-    res.points = earned + res.bonusPoints;
-    res.score = Math.min(1, res.points / res.target);
-  } else {
-    res.score = Math.min(1, earned / W + res.bonusPoints / 100);
-  }
-  res.metCount = counted.filter((i) => i.met).length;
-  res.pendingCount = counted.filter((i) => i.status === 'pending' && !i.weeklyOptional).length;
-  const scale = pointsMode ? 1 : 100 / W;
-  res.breakdown = counted.map((i) => ({
-    goalId: i.goal.id, item: i, weight: i.weight, credit: i.credit || 0,
-    share: i.weight * scale,
-    contribution: i.weight * (i.credit || 0) * scale,
-    lost: i.weight * (1 - Math.min(1, i.credit || 0)) * scale,
+  const due = counting.filter((i) => i.status !== 'excused' && !(i.weeklyOptional && !i.met));
+  if (!due.length) return res;
+  const done = due.filter((i) => i.met);
+  res.dueCount = res.scheduledCount = due.length;
+  res.doneCount = res.metCount = done.length;
+  res.pendingCount = due.filter((i) => !i.met && (i.status === 'pending' || date === today)).length;
+  res.score = done.length / due.length;
+  res.breakdown = due.map((i) => ({
+    goalId: i.goal.id, item: i, done: !!i.met,
+    share: 100 / due.length, contribution: i.met ? 100 / due.length : 0, lost: i.met ? 0 : 100 / due.length,
   }));
-  for (const i of optionBonusItems) {
-    for (const b of i.optionBonuses) {
-      res.breakdown.push({
-        goalId: i.goal.id, item: i, weight: 0, credit: 0, bonus: true, optionBonus: true, partId: b.partId,
-        share: b.points, contribution: b.points, lost: 0,
-      });
-    }
-  }
-  for (const i of bonus) {
-    res.breakdown.push({
-      goalId: i.goal.id, item: i, weight: i.weight, credit: i.credit || 0, bonus: true,
-      share: i.bonusValue, contribution: i.bonusValue * Math.min(1, i.credit || 0), lost: 0,
-    });
-  }
   return res;
 }
 
@@ -501,6 +456,7 @@ export function periodStats(state, from, to, today) {
     average: mean(scores),
     median: median(scores),
     goodDays: scores.filter((s) => s >= threshold).length,
+    perfectDays: scores.filter((s) => s >= 99.999).length,
     scoredDays: scored.length,
     totalDays: dates.length,
     skippedDays: days.filter((d) => d.skipped).length,

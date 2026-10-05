@@ -16,7 +16,7 @@ function monthShift(ym, n) {
 
 export function renderHistory() {
   const { state, today, ui } = app;
-  const scoresLabel = (avg100) => (avg100 == null ? '—' : scoreLabel(avg100 / 100, state.settings));
+  const scoresLabel = (avg100) => (avg100 == null ? '—' : scoreLabel(avg100 / 100));
   const ym = ui.histMonth;
   const first = `${ym}-01`;
   const last = endOfMonth(first);
@@ -39,7 +39,7 @@ export function renderHistory() {
     if (state.days[d]?.note) cls.push('noted');
     cells.push(`<button class="${cls.join(' ')}" ${style ? `style="${style}"` : ''} data-a="nav" data-href="#today/${d}" ${d > today ? 'disabled' : ''}
       aria-label="${fmtDate(d)}: ${s == null ? 'no score' : Math.round(s * 100) + '%'}">
-      <span class="cal-d">${Number(d.slice(8))}</span>${s != null ? `<span class="cal-s">${ds.mode === 'points' ? Math.round(ds.points) : Math.round(s * 100)}</span>` : ''}</button>`);
+      <span class="cal-d">${Number(d.slice(8))}</span>${s != null ? `<span class="cal-s">${ds.doneCount}<small>/${ds.dueCount}</small></span>` : ''}</button>`);
   }
   const thr = Number(state.settings.goodDay) || 80;
   const wdOrder = [...Array(7)].map((_, i) => (i + ws) % 7);
@@ -64,8 +64,8 @@ export function renderHistory() {
         ${wdOrder.map((d) => `<div class="cal-h">${DAY_SHORT[d].slice(0, 2)}</div>`).join('')}
         ${cells.join('')}
       </div>
-      <div class="legend"><span class="sw grad"></span>${state.settings.scoring === 'points' ? `0 → ${state.settings.dailyTarget || 100} pts` : '0 → 100%'} <span class="sw none"></span>No score <span class="sw skipped"></span>Skipped</div>
-      <p class="small">${scores.length ? `Month average <b>${scoresLabel(mean(scores))}</b> · ${scores.filter((s) => s >= thr).length} good day${scores.filter((s) => s >= thr).length === 1 ? '' : 's'} of ${scores.length}` : '<span class="muted">No scored days this month.</span>'}</p>
+      <div class="legend"><span class="sw grad"></span>none → all done <span class="sw none"></span>No score <span class="sw skipped"></span>Skipped</div>
+      <p class="small">${scores.length ? `Tasks done on an average day this month: <b>${scoresLabel(mean(scores))}</b> · ${scores.filter((s) => s >= thr).length} good day${scores.filter((s) => s >= thr).length === 1 ? '' : 's'} of ${scores.length}` : '<span class="muted">No scored days this month.</span>'}</p>
     </section>
     <section class="card">
       <div class="month-nav"><h3>Day score trend</h3>

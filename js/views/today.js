@@ -2,7 +2,7 @@
 
 import { app, openSheet, closeSheet, toast, goalColor } from '../ctx.js';
 import { sortedCats, catLabel } from './categories.js';
-import { dayScore, effectiveTarget, evaluate, versionFor, optionWorth, optionBonus } from '../engine.js';
+import { dayScore, effectiveTarget, evaluate, versionFor } from '../engine.js';
 import { getRec, setRec } from '../store.js';
 import { esc, addDays, fmtDate } from '../util.js';
 import { fmtValue, targetShort, targetText, statusLabel, pct, fmtNum } from '../format.js';
@@ -38,7 +38,7 @@ function scoreRing(score) {
   const f = score == null ? 0 : Math.max(0, Math.min(1, score));
   return `<svg viewBox="0 0 80 80" class="ring" aria-hidden="true">
     <circle cx="40" cy="40" r="${r}" class="ring-bg"/>
-    <circle cx="40" cy="40" r="${r}" class="ring-fg" stroke-dasharray="${(f * c).toFixed(1)} ${c.toFixed(1)}" transform="rotate(-90 40 40)"/>
+    ${f > 0 ? '' : '<!--'}<circle cx="40" cy="40" r="${r}" class="ring-fg" stroke-dasharray="${(f * c).toFixed(1)} ${c.toFixed(1)}" transform="rotate(-90 40 40)"/>${f > 0 ? '' : '-->'}
   </svg>`;
 }
 
@@ -75,10 +75,7 @@ function progressBar(item) {
 }
 
 function rowMeta(item, cfg) {
-  const ob = (item.optionBonuses || []).reduce((a, b) => a + b.points, 0);
-  const st = cfg.partMode === 'best' && !item.met && item.status === 'logged' && ob > 0 ? { text: `⭐ +${Math.round(ob)} bonus`, cls: 'exceeded' }
-    : cfg.partMode === 'best' && item.met && (item.credit ?? 0) > 1 ? { text: '⭐ Extra credit', cls: 'exceeded' }
-    : cfg.partMode === 'best' && item.met && (item.credit ?? 0) < 1 ? { text: 'Done', cls: 'partial' } : statusLabel(item);
+  const st = statusLabel(item);
   const parts = item.parts?.length;
   let val = '';
   if (parts && cfg.partMode === 'best') {
@@ -95,18 +92,9 @@ function rowMeta(item, cfg) {
   }
   const progress = item.hasTarget && item.status === 'logged' && item.progress != null && !parts && cfg.kind !== 'check' &&
     cfg.target?.type === 'atLeast' ? ` · ${pct(item.progress)}` : '';
-  const partsPct = (parts && item.status === 'logged' && item.credit != null ? ` · ${pct(item.credit)}` : '') +
-    (cfg.partMode === 'best' && item.met && ob > 0 ? ` · ⭐ +${Math.round(ob)}` : '');
-  const pointsMode = app.state.settings.scoring === 'points';
-  const hideMiss = pointsMode && (item.status === 'missed' || (st.cls === 'missed' && st.text === 'No progress'));
-  let ptsChip = '';
-  if (pointsMode && item.scored && item.status !== 'excused' && item.status !== 'unscheduled') {
-    const earned = item.bonus ? item.bonusValue * Math.min(1, item.credit || 0) : item.weight * (item.credit || 0);
-    const worth = item.bonus ? item.bonusValue : item.weight;
-    ptsChip = earned > 0.05
-      ? ` <span class="pts-chip earned">+${fmtNum(Math.round(earned * 10) / 10, 1)}</span>`
-      : ` <span class="pts-chip">${fmtNum(Math.round(worth * 10) / 10, 1)} pts</span>`;
-  }
+  const partsPct = parts && cfg.partMode !== 'best' && item.status === 'logged' && item.credit != null && !item.met ? ` · ${pct(item.credit)}` : '';
+  const hideMiss = st.cls === 'missed' && st.text === 'No progress';
+  const ptsChip = '';
   if (item.weekly) {
     const w = item.weekly;
     const wk = w.complete && item.status !== 'logged' ? `✓ ${w.times}/${w.times} this week` : `${w.done} of ${w.times} this week`;
@@ -138,8 +126,7 @@ function goalRow(item, ro) {
       const meta = partMeta(g, p.partId);
       const st = p.excused ? { text: 'Excused', cls: 'excused' } :
         p.logged ? (p.ev?.hasTarget ? statusLabel({ ...p.ev, status: 'logged', hasTarget: true }) : { text: 'Logged', cls: 'logged' }) : { text: p.cfg.optional ? 'Optional' : '', cls: 'pending' };
-      const ts = (p.cfg.kind === 'check' ? '' : targetShort(p.cfg, app.ui.date)) +
-        (cfg.partMode === 'best' ? `${p.cfg.kind === 'check' ? '' : ' · '}worth ${Math.round(optionWorth(p.cfg) * 100)}%${optionWorth(p.cfg) > 1 ? ' ⭐' : ''}${optionBonus(p.cfg) ? ` · +${optionBonus(p.cfg)} bonus` : ''}` : '');
+      const ts = p.cfg.kind === 'check' ? '' : targetShort(p.cfg, app.ui.date);
       return `<div class="part-row">
         <button class="g-main" data-a="entry" data-g="${g.id}" data-p="${p.partId}">
           <span class="g-text"><span class="g-name">${esc(meta.name)}</span>
@@ -155,7 +142,7 @@ function goalRow(item, ro) {
     <div class="row-top">
       <button class="g-main" data-a="${parts.length && !isChoice ? 'expand' : 'entry'}" data-g="${g.id}" data-open="${open ? 1 : 0}">
         ${g.icon ? `<span class="g-icon">${esc(g.icon)}</span>` : '<span class="g-icon"><span class="dot"></span></span>'}
-        <span class="g-text"><span class="g-name">${esc(g.name)}${g.pinned ? ' <span class="pin">★</span>' : ''}${item.bonus ? ' <span class="chip exceeded">⭐ Bonus</span>' : ''}</span>${rowMeta(item, cfg)}</span>
+        <span class="g-text"><span class="g-name">${esc(g.name)}${g.pinned ? ' <span class="pin">★</span>' : ''}</span>${rowMeta(item, cfg)}</span>
       </button>
       ${controls}
     </div>
@@ -164,15 +151,17 @@ function goalRow(item, ro) {
   </div>`;
 }
 
+// Category groups start folded; tap a heading to open it (remembered).
+// Pinned goals and the plain list (no categories) stay open.
+function isCollapsed(gr) {
+  if (gr.id === '_pinned' || gr.id === '_all') return !!app.state.collapsed[gr.id];
+  return app.state.collapsed[gr.id] ?? true;
+}
+
 function groupCount(items) {
-  const counted = items.filter((i) => i.hasTarget && i.status !== 'excused' && !i.bonus);
-  const bonusDone = items.filter((i) => i.bonus && i.status === 'logged' && (i.credit || 0) > 0).length;
-  const extra = bonusDone ? ` · ⭐ ${bonusDone}` : '';
-  if (!counted.length) return bonusDone ? `⭐ ${bonusDone} bonus` : `${items.length}`;
-  const scored = counted.filter((i) => i.scored);
-  const W = scored.reduce((a, i) => a + i.weight, 0);
-  const p = W ? ` · ${Math.round((100 * scored.reduce((a, i) => a + i.weight * Math.min(1, i.credit || 0), 0)) / W)}%` : '';
-  return `${counted.filter((i) => i.met).length} of ${counted.length} met${p}${extra}`;
+  const due = items.filter((i) => i.scored && i.status !== 'excused' && !(i.weeklyOptional && !i.met));
+  if (!due.length) return `${items.length}`;
+  return `${due.filter((i) => i.met).length} of ${due.length} done`;
 }
 
 function groupItems(items) {
@@ -206,19 +195,11 @@ export function renderToday() {
   if (ds.skipped) { scoreMain = '—'; scoreSub = 'Day skipped'; }
   else if (ds.untracked) { scoreMain = '—'; scoreSub = 'Not tracked (nothing logged)'; }
   else if (ds.score == null) { scoreMain = '—'; scoreSub = ds.items.length ? 'No scored goals today' : 'Nothing scheduled today'; }
-  else if (ds.mode === 'points') {
-    const pts = Math.round(ds.points);
-    scoreMain = `${pts}<span class="of-target"> / ${ds.target}</span>`;
-    scoreSub = pts >= ds.target
-      ? `🎉 Goal reached${pts > ds.target ? ` · +${pts - ds.target} extra` : ''}`
-      : `${ds.target - pts} points to go`;
-    if (ds.bonusDone) scoreSub += ` · ⭐ +${Math.round(ds.bonusPoints)} bonus`;
-  } else {
-    scoreMain = pct(ds.score);
-    scoreSub = ds.provisional && ds.pendingCount
-      ? `so far · ${ds.pendingCount} left`
-      : `${ds.metCount} of ${ds.scheduledCount - ds.excusedCount} met${ds.excusedCount ? ` · ${ds.excusedCount} excused` : ''}`;
-    if (ds.bonusDone) scoreSub += ` · ⭐ +${Math.round(ds.bonusPoints)} bonus`;
+  else {
+    scoreMain = `${ds.doneCount}<span class="of-target"> / ${ds.dueCount} done</span>`;
+    const left = ds.dueCount - ds.doneCount;
+    scoreSub = left === 0 ? '🎉 All done!' : `${left} to go`;
+    if (ds.excusedCount) scoreSub += ` · ${ds.excusedCount} excused`;
   }
 
   const activeGoals = state.goals.filter((g) => g.state === 'active');
@@ -244,10 +225,10 @@ export function renderToday() {
     ${ds.skipped ? `<div class="notice">This day is skipped and left out of your averages. <button class="link" data-a="skipDay" ${ro}>Undo</button></div>` : ''}
     ${groups.map((gr) => `
       <section class="group">
-        ${gr.name ? `<button class="group-head" data-a="collapse" data-id="${gr.id}" aria-expanded="${!state.collapsed[gr.id]}">
-          <span>${state.collapsed[gr.id] ? '▸' : '▾'} ${gr.id === '_pinned' || gr.id === '_unc' || gr.id === '_all' ? esc(gr.name) : gr.name}</span>
+        ${gr.name ? `<button class="group-head${isCollapsed(gr) ? '' : ' open'}" data-a="collapse" data-id="${gr.id}" data-closed="${isCollapsed(gr) ? 1 : 0}" aria-expanded="${!isCollapsed(gr)}">
+          <span>${isCollapsed(gr) ? '▸' : '▾'} ${gr.id === '_pinned' || gr.id === '_unc' || gr.id === '_all' ? esc(gr.name) : gr.name}</span>
           <span class="group-count">${groupCount(gr.items)}</span></button>` : ''}
-        ${state.collapsed[gr.id] ? '' : gr.items.map((i) => goalRow(i, ro)).join('')}
+        ${isCollapsed(gr) ? '' : gr.items.map((i) => goalRow(i, ro)).join('')}
       </section>`).join('')}
     ${!ds.items.length ? '<p class="muted center">No goals are scheduled for this day.</p>' : ''}
     ${extraItems.length ? `<details class="group extra"${ds.extra.length ? ' open' : ''}>
@@ -343,8 +324,7 @@ function openChoiceSheet(goal, date) {
     const r = getRec(app.state, date, goal.id, pc.partId) || {};
     const fill = fillValue(pc, date);
     const val = r.value != null && r.value !== true ? Number(r.value) : (fill != null && fill !== true ? fill : '');
-    const tags = [`worth ${Math.round(optionWorth(pc) * 100)}%${optionWorth(pc) > 1 ? ' ⭐' : ''}`];
-    if (optionBonus(pc)) tags.push(`+${optionBonus(pc)} bonus`);
+    const tags = [pc.kind === 'check' ? 'done / not done' : `target ${targetText(pc, date)}`];
     let amount = '';
     if (pc.kind === 'duration') {
       amount = `<div class="choice-amount"><span class="muted small">How long?</span>
@@ -444,7 +424,7 @@ export const todayActions = {
   dayPrev() { app.ui.date = addDays(app.ui.date, -1); app.render(); },
   dayNext() { if (app.ui.date < app.today) { app.ui.date = addDays(app.ui.date, 1); app.render(); } },
   expand(el) { app.ui.expanded[el.dataset.g] = el.dataset.open !== '1'; app.render(); },
-  collapse(el) { app.state.collapsed[el.dataset.id] = !app.state.collapsed[el.dataset.id]; app.commit(); },
+  collapse(el) { app.state.collapsed[el.dataset.id] = el.dataset.closed !== '1'; app.commit(); },
   toggle(el) {
     const { state, ui } = app;
     const r = getRec(state, ui.date, el.dataset.g, el.dataset.p);
@@ -555,58 +535,17 @@ export const todayActions = {
   breakdown() {
     const ds = dayScore(app.state, app.ui.date, app.today);
     if (ds.score == null) return;
-    const regular = ds.breakdown.filter((b) => !b.bonus).sort((a, b) => b.lost - a.lost || b.share - a.share);
-    const bonus = ds.breakdown.filter((b) => b.bonus);
-    if (ds.mode === 'points') return pointsBreakdown(ds, regular, bonus);
-    const base = (100 * ds.earned) / ds.weightSum;
-    const lostSum = regular.reduce((a, b) => a + b.lost, 0);
-    const name = (b) => `${esc(b.item.goal.icon || '')} ${esc(b.item.goal.name)}${b.optionBonus ? ` · ${esc(partMeta(b.item.goal, b.partId).name)}` : ''}`;
+    const name = (i) => `${esc(i.goal.icon || '')} ${esc(i.goal.name)}${i.chosen ? ` <span class="muted small">· ${esc(partMeta(i.goal, i.chosen).name)}</span>` : ''}`;
+    const done = ds.breakdown.filter((b) => b.done).map((b) => b.item);
+    const notDone = ds.breakdown.filter((b) => !b.done).map((b) => b.item);
     openSheet(`
-      <div class="sheet-head"><h2>${pct(ds.score)} · ${esc(dayTitle(app.ui.date))}</h2><button class="x" data-a="closeSheet" aria-label="Close">✕</button></div>
-      <p class="muted small">Each goal is worth its share of the day (set by its importance and difficulty). Points earned + points lost = 100.</p>
-      <table class="tbl">
-        <thead><tr><th>Goal</th><th class="num">Worth</th><th class="num">Earned</th><th class="num">Lost</th></tr></thead>
-        <tbody>${regular.map((b) => `<tr>
-          <td>${name(b)}
-            ${b.item.version.partMode === 'best' ? `<div class="muted small">${b.item.chosen ? `${esc(partMeta(b.item.goal, b.item.chosen).name)} done (worth ${Math.round(optionWorth(b.item.parts.find((p) => p.partId === b.item.chosen).cfg) * 100)}%)` : 'No option done'}</div>`
-              : b.item.parts?.length ? `<div class="muted small">${b.item.parts.filter((p) => p.counted).map((p) => `${esc(partMeta(b.item.goal, p.partId).name)} ${p.excused ? 'excused' : pct(Math.min(1, p.credit || 0))}`).join(' · ')}</div>` : ''}</td>
-          <td class="num">${b.share.toFixed(1)}</td><td class="num">${b.contribution.toFixed(1)}</td>
-          <td class="num ${b.lost > 0.05 ? 'lost' : ''}">${b.lost > 0.05 ? b.lost.toFixed(1) : '—'}</td></tr>`).join('')}
-        </tbody>
-        <tfoot><tr><td>${bonus.length ? 'Goals' : 'Total'}</td><td class="num">100</td><td class="num">${base.toFixed(1)}</td><td class="num">${lostSum.toFixed(1)}</td></tr></tfoot>
-      </table>
-      ${bonus.length ? `<table class="tbl bonus-tbl">
-        <tbody>${bonus.map((b) => `<tr><td>⭐ ${name(b)}</td><td class="num bonus-pts">+${b.contribution.toFixed(1)}</td></tr>`).join('')}</tbody>
-        <tfoot><tr><td>Day score</td><td class="num">${(ds.score * 100).toFixed(1)}</td></tr></tfoot>
-      </table>
-      <p class="muted small">Bonus goals add their points on top; skipping one never costs anything.
-        ${ds.bonusRaw > ds.bonusPoints + 0.05 ? ` Bonuses are limited to +${ds.bonusCap} a day, so +${ds.bonusPoints.toFixed(0)} counted.` : ''}
-        ${base + ds.bonusPoints > 100.05 ? ` A day tops out at 100.` : ''}</p>` : ''}
-      ${ds.excusedCount ? `<p class="muted small">${ds.excusedCount} excused goal(s) left out of this day.</p>` : ''}
-      ${ds.extra.length ? `<p class="muted small">Extra (not scheduled, not scored): ${ds.extra.map((i) => esc(i.goal.name)).join(', ')}</p>` : ''}`);
+      <div class="sheet-head"><h2>${ds.doneCount} of ${ds.dueCount} done · ${esc(dayTitle(app.ui.date))}</h2><button class="x" data-a="closeSheet" aria-label="Close">✕</button></div>
+      ${done.length ? `<h3 class="sub-h">✓ Done</h3><ul class="check-list">${done.map((i) => `<li class="done">${name(i)}</li>`).join('')}</ul>` : ''}
+      ${notDone.length ? `<h3 class="sub-h">Not done${app.ui.date === app.today ? ' yet' : ''}</h3><ul class="check-list">${notDone.map((i) => `<li>${name(i)}${i.status === 'logged' && i.credit != null ? ` <span class="muted small">(${pct(Math.min(1, i.credit))} of the way)</span>` : ''}</li>`).join('')}</ul>` : ''}
+      ${ds.excusedCount ? `<p class="muted small">${ds.excusedCount} excused — left out of this day.</p>` : ''}
+      ${ds.extra.length ? `<p class="muted small">Also logged (not due today): ${ds.extra.map((i) => esc(i.goal.name)).join(', ')}</p>` : ''}`);
   },
 };
-
-function pointsBreakdown(ds, regular, bonus) {
-  const name = (b) => `${esc(b.item.goal.icon || '')} ${esc(b.item.goal.name)}${b.optionBonus ? ` · ${esc(partMeta(b.item.goal, b.partId).name)}` : ''}`;
-  const done = regular.filter((b) => b.contribution > 0.05).sort((a, b) => b.contribution - a.contribution);
-  const notDone = regular.filter((b) => b.contribution <= 0.05).sort((a, b) => b.share - a.share);
-  const fmt = (x) => fmtNum(Math.round(x * 10) / 10, 1);
-  const pts = Math.round(ds.points);
-  openSheet(`
-    <div class="sheet-head"><h2>${pts} / ${ds.target} points · ${esc(dayTitle(app.ui.date))}</h2><button class="x" data-a="closeSheet" aria-label="Close">✕</button></div>
-    <p class="muted small">Every task you do adds its points (more for hard ones). Skipping a task never takes points away — the aim is ${ds.target} a day.</p>
-    ${done.length ? `<table class="tbl">
-      <thead><tr><th>Done</th><th class="num">Points</th></tr></thead>
-      <tbody>${done.map((b) => `<tr><td>${name(b)}${b.credit < 0.999 ? ` <span class="muted small">(${pct(b.credit)} of ${fmt(b.share)})</span>` : ''}</td><td class="num">+${fmt(b.contribution)}</td></tr>`).join('')}
-        ${bonus.map((b) => `<tr><td>⭐ ${name(b)}</td><td class="num bonus-pts">+${fmt(b.contribution)}</td></tr>`).join('')}</tbody>
-      <tfoot><tr><td>Total</td><td class="num">${fmt(ds.points)}</td></tr></tfoot>
-    </table>` : '<p class="muted">Nothing done yet.</p>'}
-    ${ds.bonusRaw > ds.bonusPoints + 0.05 ? `<p class="muted small">Bonuses are limited to +${ds.bonusCap} a day, so +${fmt(ds.bonusPoints)} counted.</p>` : ''}
-    ${notDone.length ? `<h3 class="sub-h">Still available</h3><table class="tbl">
-      <tbody>${notDone.map((b) => `<tr><td class="muted">${name(b)}</td><td class="num muted">${fmt(b.share)}</td></tr>`).join('')}</tbody></table>` : ''}
-    <p class="muted small">${fmt(ds.possible)} points were possible today.</p>`);
-}
 
 export const todayChange = {
   pickDate(el) {

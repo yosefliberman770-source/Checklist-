@@ -131,18 +131,13 @@ export const categorySubmit = {
 // A category's progress on one day: the importance-weighted credit of its
 // regular scored goals (bonus goals left out), or null if none were due.
 export function catDayScore(ds, catId) {
-  let share = 0, contrib = 0;
-  for (const b of ds.breakdown) {
-    if (b.bonus || (b.item.goal.categoryId || '') !== (catId || '')) continue;
-    share += b.share;
-    contrib += (b.share * Math.min(1, b.credit));
-  }
-  return share > 0 ? contrib / share : null;
+  const mine = ds.breakdown.filter((b) => (b.item.goal.categoryId || '') === (catId || ''));
+  return mine.length ? mine.filter((b) => b.done).length / mine.length : null;
 }
 
 export function catToday(ds, catId) {
-  const items = ds.items.filter((i) => i.scored && !i.bonus && i.status !== 'excused' && (i.goal.categoryId || '') === (catId || ''));
-  return { score: catDayScore(ds, catId), due: items.length, met: items.filter((i) => i.met).length };
+  const mine = ds.breakdown.filter((b) => (b.item.goal.categoryId || '') === (catId || ''));
+  return { score: mine.length ? mine.filter((b) => b.done).length / mine.length : null, due: mine.length, met: mine.filter((b) => b.done).length };
 }
 
 export const catColor = (c) => c?.color || PALETTE[(sortedCats().indexOf(c) + 2) % PALETTE.length];
@@ -159,7 +154,7 @@ export function categoryCard(c, goals, today) {
     <span class="cat-card-name">${name}</span>
     <span class="cat-card-meta">${goals.length} goal${goals.length === 1 ? '' : 's'}</span>
     <span class="cat-card-bar"><span style="width:${pctTxt ?? 0}%"></span></span>
-    <span class="cat-card-today">${today.due ? `Today ${pctTxt}% · ${today.met}/${today.due} met` : 'Nothing due today'}</span>
+    <span class="cat-card-today">${today.due ? `Today ${today.met} of ${today.due} done` : 'Nothing due today'}</span>
   </a>`;
 }
 
@@ -189,7 +184,7 @@ export function renderCategoryPage({ goalListRow }) {
     </section>
     <div class="tiles">
       <div class="tile"><div class="tile-num">${t.score == null ? '—' : `${Math.round(t.score * 100)}%`}</div>
-        <div class="tile-label">${t.due ? `Today · ${t.met} of ${t.due} met` : 'Nothing due today'}</div></div>
+        <div class="tile-label">${t.due ? `Today · ${t.met} of ${t.due} done` : 'Nothing due today'}</div></div>
       <div class="tile"><div class="tile-num">${avg == null ? '—' : `${Math.round(avg * 100)}%`}</div><div class="tile-label">Last 30 days</div></div>
     </div>
     <div class="row-btns cat-actions">

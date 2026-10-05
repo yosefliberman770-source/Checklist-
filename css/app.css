@@ -136,6 +136,10 @@ body[data-route="edit"] .tabbar, body[data-route="new"] .tabbar { display: none;
 .score-big { font-size: 2.1rem; font-weight: 750; letter-spacing: -.02em; line-height: 1.05; }
 .score-sub { color: var(--muted); }
 .of-target { font-size: 1.1rem; font-weight: 600; color: var(--muted); letter-spacing: 0; }
+.check-list { list-style: none; padding: 0; margin: 4px 0 8px; }
+.check-list li { padding: 8px 2px; border-bottom: 1px solid var(--line); }
+.check-list li.done::before { content: '✓ '; color: var(--met); font-weight: 700; }
+.group-head.open { color: var(--text); }
 .sub-h { margin: 14px 0 4px; font-size: .9rem; color: var(--muted); }
 .small-row { margin-top: 6px; }
 .small-row .inline-num input { width: 5.5em; }
@@ -489,6 +493,7 @@ form.inline { margin-top: 12px; flex-wrap: nowrap; }
 .cal-cell.noted::after { content: ''; position: absolute; top: 4px; right: 4px; width: 5px; height: 5px; border-radius: 50%; background: var(--partial); }
 .cal-d { font-size: .72rem; opacity: .75; }
 .cal-s { font-size: .82rem; font-weight: 700; }
+.cal-s small { font-size: .62rem; font-weight: 500; opacity: .8; }
 
 .toast {
   position: fixed; left: 50%; transform: translateX(-50%); z-index: 60;

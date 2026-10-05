@@ -44,28 +44,18 @@ you pick. It works even when the app is closed; delete the event to stop it.
   your own unit), or *time*. Targets can be *at least*, *no more than*, *between*, *exactly*, or none.
 - **Log what really happened.** Tap **✓ Done** to fill in the target, then adjust with − / + or tap the
   value to type the exact amount — under or over the target.
+- **A simple checklist.** Each day shows **X of Y done** — every task counts the same. A number or time
+  task counts as done once its target is reached (partial progress is shown but doesn't check it off).
+  Excused tasks and skipped days are left out; History and Stats show how much you got done and how
+  consistent each task is.
 - **Categories like playlists.** The Goals tab shows your categories as cards (e.g. 📚 Reading) or all
-  goals in one list. Open a category to see its goals (Fiction, Nonfiction, History…), add a new goal
-  there, or move existing goals in. Categories organize; they never change your score.
-- **Importance** (Low · Normal · High · Top, each twice the one before) sets how much a goal affects
-  your score. Optional **difficulty** (Easy ×½ · Normal · Hard ×1.5 · Very hard ×2) multiplies it, so a
-  low-priority but hard goal can be worth more points.
-- **Points mode (default).** Every task is worth points (5 · 10 · 20 · 40 or any number), hard tasks give
-  extra points on top (+5 · +10 or any number), and the aim is a daily points goal (100 by default).
-  Skipping a task never takes points away, so you can have lots of tasks and pick what to do.
-  Settings → *How your day is scored* switches to percent mode.
-- **Percent mode: day score** = weighted average of each scheduled goal's credit (0–100%). Unscheduled goals never
-  count as failures; excused goals and skipped days are left out; a missing entry is a miss — never a 0
-  value that accidentally "meets" a *no more than* goal. Tap the score for the exact breakdown.
+  goals in one list. Open a category to see its goals, add a new goal there, or move existing goals in.
+  On Today, categories start folded with their progress (e.g. "Health · 2 of 4 done") — tap to open.
 - **Schedules.** Every day, certain days of the week (e.g. only Mondays), **a number of days a week on
   any days** (e.g. Gym 3× a week: it shows every day until done 3 times that week, and skipped days never
   count against you), every few days, specific dates, or any time.
-- **Either/or goals.** One goal, several options, do any one: e.g. *Exercise* = Workout 10 min (worth 100%)
-  **or** Stretch 10 min (worth 75%). The goal earns the best option you did; an option can be worth
-  over 100% (extra credit) and/or add fixed bonus points. Make one with
-  *How is it measured? → Either / or*, or **+ Either/or here** inside a category.
-- **Bonus goals.** Set *In your day score → ⭐ Bonus*: doing it adds points, skipping it never costs
-  any, and the day still tops out at 100%.
+- **Either/or goals.** One task, several options — e.g. *Exercise* = Workout **or** Stretch. Tap it and
+  pick which one you did; any option checks it off.
 - **Consistency.** Stats ranks your goals from most to least consistent (how often each was met on its
   scheduled days), shows whether each is improving or slipping, and each goal's page shows its rank.
 - **History stays honest.** Changing what a goal means asks *from when* it applies. Past days keep the
