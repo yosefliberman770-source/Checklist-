@@ -57,6 +57,9 @@ you pick. It works even when the app is closed; delete the event to stop it.
 - **Percent mode: day score** = weighted average of each scheduled goal's credit (0–100%). Unscheduled goals never
   count as failures; excused goals and skipped days are left out; a missing entry is a miss — never a 0
   value that accidentally "meets" a *no more than* goal. Tap the score for the exact breakdown.
+- **Schedules.** Every day, certain days of the week (e.g. only Mondays), **a number of days a week on
+  any days** (e.g. Gym 3× a week: it shows every day until done 3 times that week, and skipped days never
+  count against you), every few days, specific dates, or any time.
 - **Either/or goals.** One goal, several options, do any one: e.g. *Exercise* = Workout 10 min (worth 100%)
   **or** Stretch 10 min (worth 75%). The goal earns the best option you did; an option can be worth
   over 100% (extra credit) and/or add fixed bonus points. Make one with

@@ -155,7 +155,7 @@ export function renderGoalDetail() {
   const rankIdx = cons.rows.filter((r) => r.enough).findIndex((r) => r.goal.id === goal.id);
   const rankCount = cons.rows.filter((r) => r.enough).length;
   const dates = range.to >= range.from ? dateRange(range.from, ps.end < range.from ? range.from : ps.end) : [];
-  const items = dates.map((d) => goalDay(goal, d, state.records, app.today));
+  const items = dates.map((d) => goalDay(goal, d, state.records, app.today, { weekStart: state.settings.weekStart }));
   const cat = state.categories.find((c) => c.id === goal.categoryId);
   const isTrash = goal.state === 'trash';
   const ongoingPause = (goal.pauses || []).find((p) => !p.end || p.end >= app.today);

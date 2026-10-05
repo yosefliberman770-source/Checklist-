@@ -1,7 +1,7 @@
 // Turning numbers and configuration into words the user reads.
 
 import { effectiveTarget, WEIGHTS, DIFFICULTIES, basePoints, extraPoints } from './engine.js';
-import { DAY_SHORT, fmtDate } from './util.js';
+import { DAY_SHORT, DAY_LONG, fmtDate } from './util.js';
 
 export function fmtDur(min) {
   if (min == null || min === '' || Number.isNaN(Number(min))) return '—';
@@ -75,9 +75,11 @@ export function scheduleText(s) {
       if (d.join() === '1,2,3,4,5') return 'on weekdays';
       if (d.join() === '0,6') return 'on weekends';
       if (!d.length) return 'on no days (pick some days)';
+      if (d.length === 1) return `every ${DAY_LONG[d[0]]}`;
       return 'on ' + d.map((x) => DAY_SHORT[x]).join(', ');
     }
     case 'interval': return Number(s.every) > 1 ? `every ${s.every} days` : 'every day';
+    case 'weekly': return Number(s.times) > 1 ? `${s.times} days a week` : 'once a week';
     case 'dates': {
       const n = (s.dates || []).length;
       if (n === 1) return `on ${fmtDate(s.dates[0], { year: true })}`;

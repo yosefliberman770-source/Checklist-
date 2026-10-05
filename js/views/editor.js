@@ -67,7 +67,7 @@ export function newDraft() {
     pinned: false, step: '', start: app.today, end: '', preset: 'check',
     kind: 'check', unit: '', precision: 0, allowNegative: false, target: blankTarget(), dayTargets: {},
     credit: 'partial', cap: 1, weight: 2, points: 10, extraPoints: 0, scored: true, bonus: false, bonusPoints: DEFAULT_BONUS_POINTS,
-    schedule: { type: 'daily', days: [1, 2, 3, 4, 5], every: 2, anchor: '', dates: [] },
+    schedule: { type: 'daily', days: [1, 2, 3, 4, 5], every: 2, times: 3, anchor: '', dates: [] },
     parts: [], partMode: 'each', partWeighting: 'target', _newDate: app.today,
   };
 }
@@ -173,6 +173,7 @@ function cleanSchedule(s) {
   switch (s.type) {
     case 'weekdays': return { type: 'weekdays', days: [...new Set(s.days)].map(Number).sort() };
     case 'interval': return { type: 'interval', every: Math.max(1, Number(s.every) || 1), ...(s.anchor ? { anchor: s.anchor } : {}) };
+    case 'weekly': return { type: 'weekly', times: Math.max(1, Math.min(7, Math.round(Number(s.times) || 1))) };
     case 'dates': return { type: 'dates', dates: [...new Set(s.dates)].sort() };
     case 'anytime': return { type: 'anytime' };
     default: return { type: 'daily' };
@@ -303,7 +304,11 @@ function measureSelect(path, kind) {
 
 function scheduleFields(s) {
   let extra = '';
-  if (s.type === 'weekdays') {
+  if (s.type === 'weekly') {
+    const n = Number(s.times) || 3;
+    extra = `<div class="daychips">${[1, 2, 3, 4, 5, 6].map((k) => `<button type="button" class="daychip${n === k ? ' on' : ''}" data-a="edSet" data-path="schedule.times" data-v="${k}">${k}×</button>`).join('')}</div>
+      <p class="muted small">${n === 1 ? 'Once a week, any day you like.' : `${n} days a week, any days you like.`} It shows up every day until you've done it ${n === 1 ? 'once' : `${n} times`} that week — days you skip never count against you.</p>`;
+  } else if (s.type === 'weekdays') {
     const order = app.state.settings.weekStart === 0 ? [0, 1, 2, 3, 4, 5, 6] : [1, 2, 3, 4, 5, 6, 0];
     extra = `<div class="daychips">${order.map((d) => `<button type="button" class="daychip${s.days.includes(d) ? ' on' : ''}" data-a="edDay" data-d="${d}">${DAY_SHORT[d]}</button>`).join('')}</div>`;
   } else if (s.type === 'interval') {
@@ -316,7 +321,7 @@ function scheduleFields(s) {
     extra = '<p class="muted small">Never expected, so it is never missed — and it can\'t count toward your score.</p>';
   }
   return `<select data-bind="schedule.type" data-rr>
-      ${[['daily', 'Every day'], ['weekdays', 'Specific days of the week'], ['interval', 'Every few days'], ['dates', 'Specific dates'], ['anytime', 'Any time (not scheduled)']]
+      ${[['daily', 'Every day'], ['weekdays', 'Certain days of the week (e.g. only Mondays)'], ['weekly', 'A number of days a week (any days)'], ['interval', 'Every few days'], ['dates', 'Specific dates'], ['anytime', 'Any time (not scheduled)']]
         .map(([v, l]) => `<option value="${v}"${s.type === v ? ' selected' : ''}>${l}</option>`).join('')}
     </select>${extra}`;
 }

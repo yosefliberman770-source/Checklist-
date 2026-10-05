@@ -3,7 +3,7 @@
 // each goal keeps immutable versions and the engine always uses the version
 // that was in effect on the date being scored.
 
-import { addDays, diffDays, weekday, clamp, mean, median, dateRange } from './util.js';
+import { addDays, diffDays, weekday, clamp, mean, median, dateRange, startOfWeek } from './util.js';
 
 export const ENGINE_VERSION = 2;
 
@@ -112,6 +112,9 @@ export function matchesSchedule(schedule, date, goal) {
       return d >= 0 && d % every === 0;
     }
     case 'dates': return (s.dates || []).includes(date);
+    // "N days a week, any days": a candidate every day; goalDay decides from
+    // what's already been done this week.
+    case 'weekly': return true;
     case 'anytime': return false;
     default: return false;
   }
@@ -224,7 +227,36 @@ export const optionWorth = (pc) => (pc.worth === '' || pc.worth == null || Numbe
 // Fixed bonus points an option adds when done (on top of the goal's credit).
 export const optionBonus = (pc) => (Number(pc.bonusPoints) > 0 ? Number(pc.bonusPoints) : 0);
 
-export function goalDay(goal, date, records, today) {
+// One goal on one day. Weekly-quota goals ("3 days a week, any days") are
+// available every day until done N times that week; days they aren't done
+// never count against you, and once the quota is met they step aside.
+export function goalDay(goal, date, records, today, opts = {}) {
+  const res = goalDayBase(goal, date, records, today);
+  const sched = res.version.schedule;
+  if (sched?.type !== 'weekly' || opts.ignoreWeekly || !res.active) return res;
+  const times = Math.max(1, Math.min(7, Number(sched.times) || 1));
+  const doneOn = (r) => r.status === 'logged' && (r.credit == null ? r.value != null : r.credit > 0);
+  let before = 0;
+  for (let d = startOfWeek(date, opts.weekStart ?? 1); d < date; d = addDays(d, 1)) {
+    const prev = goalDayBase(goal, d, records, today);
+    if (prev.active && doneOn(prev)) before++;
+  }
+  const doneToday = doneOn(res);
+  res.weekly = { times, before, done: before + (doneToday ? 1 : 0) };
+  if (before >= times) {
+    // Quota already met this week: extra logs are kept but not scored.
+    res.scheduled = false;
+    res.weekly.complete = true;
+    if (!doneToday) { res.status = 'unscheduled'; res.credit = null; }
+  } else if (!doneToday) {
+    // Still available (today or when logging a past day late) — never "missed".
+    res.weeklyOptional = true;
+    if (res.status === 'missed') res.status = 'pending';
+  }
+  return res;
+}
+
+function goalDayBase(goal, date, records, today) {
   const v = versionFor(goal, date);
   const active = isActiveOn(goal, date);
   const scheduled = active && matchesSchedule(v.schedule, date, goal);
@@ -341,7 +373,7 @@ export function dayHasData(state, date) {
 export function dayScore(state, date, today) {
   const day = state.days[date] || {};
   const goals = state.goals.filter((g) => g.state !== 'trash');
-  const all = goals.map((g) => goalDay(g, date, state.records, today));
+  const all = goals.map((g) => goalDay(g, date, state.records, today, { weekStart: state.settings.weekStart }));
   const items = all.filter((i) => i.scheduled);
   const extra = all.filter((i) => !i.scheduled && i.status === 'logged');
   const res = {
@@ -364,7 +396,8 @@ export function dayScore(state, date, today) {
   }
   // Regular goals set the scale (100%). Bonus goals only add on top of what
   // was earned, never enter the denominator, and the day stays capped at 100%.
-  const counted = regularItems.filter((i) => i.status !== 'excused');
+  const pointsModeEarly = scoringMode(state.settings) === 'points';
+  const counted = regularItems.filter((i) => i.status !== 'excused' && !(i.weeklyOptional && !pointsModeEarly));
   const bonus = scoredItems.filter((i) => i.bonus && i.status === 'logged');
   const W = counted.reduce((a, i) => a + i.weight, 0);
   if (!counted.length || W <= 0) return res;
@@ -394,7 +427,7 @@ export function dayScore(state, date, today) {
     res.score = Math.min(1, earned / W + res.bonusPoints / 100);
   }
   res.metCount = counted.filter((i) => i.met).length;
-  res.pendingCount = counted.filter((i) => i.status === 'pending').length;
+  res.pendingCount = counted.filter((i) => i.status === 'pending' && !i.weeklyOptional).length;
   const scale = pointsMode ? 1 : 100 / W;
   res.breakdown = counted.map((i) => ({
     goalId: i.goal.id, item: i, weight: i.weight, credit: i.credit || 0,
@@ -432,7 +465,7 @@ export function periodStats(state, from, to, today) {
   const lostTotals = {};
   for (const d of days) {
     for (const i of d.items) {
-      if (!i.hasTarget) continue;
+      if (!i.hasTarget || i.weeklyOptional) continue;
       const g = (perGoal[i.goal.id] ||= { goal: i.goal, scheduled: 0, met: 0, excused: 0, credits: [], values: [] });
       if (i.status === 'excused') { g.excused++; continue; }
       if (d.skipped || d.untracked) continue;

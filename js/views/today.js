@@ -107,6 +107,11 @@ function rowMeta(item, cfg) {
       ? ` <span class="pts-chip earned">+${fmtNum(Math.round(earned * 10) / 10, 1)}</span>`
       : ` <span class="pts-chip">${fmtNum(Math.round(worth * 10) / 10, 1)} pts</span>`;
   }
+  if (item.weekly) {
+    const w = item.weekly;
+    const wk = w.complete && item.status !== 'logged' ? `✓ ${w.times}/${w.times} this week` : `${w.done} of ${w.times} this week`;
+    val = val ? `${val} · ${wk}` : wk;
+  }
   return `<span class="g-meta">${esc(val)}${progress}${partsPct}${st.text && !hideMiss ? ` <span class="chip ${st.cls}">${st.text}</span>` : ''}${ptsChip}${item.note ? ' <span class="noteflag" title="Has a note">✎</span>' : ''}</span>`;
 }
 
@@ -246,7 +251,7 @@ export function renderToday() {
       </section>`).join('')}
     ${!ds.items.length ? '<p class="muted center">No goals are scheduled for this day.</p>' : ''}
     ${extraItems.length ? `<details class="group extra"${ds.extra.length ? ' open' : ''}>
-      <summary>Not scheduled ${date === today ? 'today' : 'this day'} <span class="muted">${extraItems.length}</span></summary>
+      <summary>Not scheduled or done for the week <span class="muted">${extraItems.length}</span></summary>
       <p class="muted small">Anything you log here is kept as extra and doesn't change the day score.</p>
       ${extraItems.map((i) => goalRow(i, ro)).join('')}
     </details>` : ''}

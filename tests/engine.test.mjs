@@ -377,3 +377,41 @@ test('old goals keep the same percent scores under the points model', () => {
   // weights 4 vs 1.5 → points 20 vs 7.5: same ratio
   close(dayScore(st([hi, lo], { [recKey(D, 'hi')]: rec(true) }), D, TODAY).score, 4 / 5.5);
 });
+
+test('weekly quota: available until done N times, missed days never count', () => {
+  // week of Mon 2026-09-28 .. Sun 2026-10-04; today is Mon 2026-10-05
+  const gym = goal('gym', { kind: 'check', points: 10, schedule: { type: 'weekly', times: 2 } });
+  const recs = { [recKey('2026-09-29', 'gym')]: rec(true), [recKey('2026-10-01', 'gym')]: rec(true), [recKey('2026-10-02', 'gym')]: rec(true) };
+  const o = { weekStart: 1 };
+  const mon = goalDay(gym, '2026-09-28', recs, TODAY, o);                          // not done, past: available, no penalty
+  assert.equal(mon.weeklyOptional, true);
+  assert.equal(mon.status, 'pending');
+  assert.equal(goalDay(gym, '2026-09-29', recs, TODAY, o).scheduled, true);       // 1st
+  assert.equal(goalDay(gym, '2026-10-01', recs, TODAY, o).scheduled, true);       // 2nd
+  const third = goalDay(gym, '2026-10-02', recs, TODAY, o);                        // quota met: extra, not scored
+  assert.equal(third.scheduled, false);
+  assert.equal(third.weekly.complete, true);
+  assert.equal(goalDay(gym, '2026-10-03', recs, TODAY, o).status, 'unscheduled');
+  // new week: available again today
+  const today = goalDay(gym, TODAY, recs, TODAY, o);
+  assert.equal(today.scheduled, true);
+  assert.equal(today.weeklyOptional, true);
+  // points mode: earns points on the days done
+  const s = st([gym], recs, { scoring: 'points', weekStart: 1 });
+  close(dayScore(s, '2026-09-29', TODAY).points, 10);
+  close(dayScore(s, '2026-09-28', TODAY).points, 0);
+  assert.equal(dayScore(s, '2026-10-02', TODAY).score, null);
+  // percent mode: an undone weekly task doesn't pull today's percent down
+  const a = goal('a', { kind: 'check' });
+  const s2 = st([a, gym], { ...recs, [recKey(TODAY, 'a')]: rec(true) }, { weekStart: 1 });
+  assert.equal(dayScore(s2, TODAY, TODAY).score, 1);
+});
+
+test('weekly quota: optional days are not counted as misses in stats', () => {
+  const gym = goal('gym', { kind: 'check', schedule: { type: 'weekly', times: 2 } });
+  const recs = { [recKey('2026-09-29', 'gym')]: rec(true), [recKey('2026-10-01', 'gym')]: rec(true) };
+  const p = periodStats(st([gym], recs, { weekStart: 1 }), '2026-09-28', '2026-10-04', TODAY);
+  const g = p.goals.find((x) => x.goal.id === 'gym');
+  assert.equal(g.scheduled, 2);
+  assert.equal(g.met, 2);
+});
