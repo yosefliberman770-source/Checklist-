@@ -1,0 +1,35 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <title>My Day</title>
+  <meta name="description" content="Your own daily goal system: you decide what matters and how it's measured.">
+  <meta name="theme-color" content="#f6f5f2" media="(prefers-color-scheme: light)">
+  <meta name="theme-color" content="#16171a" media="(prefers-color-scheme: dark)">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="default">
+  <meta name="apple-mobile-web-app-title" content="My Day">
+  <link rel="manifest" href="manifest.webmanifest">
+  <link rel="icon" href="icons/icon.svg" type="image/svg+xml">
+  <link rel="apple-touch-icon" href="icons/apple-touch-icon.png">
+  <link rel="stylesheet" href="css/app.css">
+</head>
+<body>
+  <main id="view" class="view" aria-live="polite">
+    <p class="muted center loading">Loading…</p>
+  </main>
+  <nav class="tabbar" aria-label="Main">
+    <a href="#today" data-tab="today"><span class="ti">◎</span><span>Today</span></a>
+    <a href="#history" data-tab="history"><span class="ti">▦</span><span>History</span></a>
+    <a href="#stats" data-tab="stats"><span class="ti">↗</span><span>Stats</span></a>
+    <a href="#goals" data-tab="goals"><span class="ti">☰</span><span>Goals</span></a>
+    <a href="#settings" data-tab="settings"><span class="ti">⚙</span><span>Settings</span></a>
+  </nav>
+  <div id="sheet" class="sheet" hidden></div>
+  <div id="toast" class="toast" role="status" hidden></div>
+  <noscript>This app needs JavaScript turned on.</noscript>
+  <script type="module" src="js/main.js"></script>
+</body>
+</html>
