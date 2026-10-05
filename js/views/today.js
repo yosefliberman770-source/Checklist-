@@ -128,7 +128,7 @@ function goalRow(item, ro) {
     <div class="row-top">
       <button class="g-main" data-a="${parts.length ? 'expand' : 'entry'}" data-g="${g.id}">
         ${g.icon ? `<span class="g-icon">${esc(g.icon)}</span>` : '<span class="g-icon"><span class="dot"></span></span>'}
-        <span class="g-text"><span class="g-name">${esc(g.name)}${g.pinned ? ' <span class="pin">★</span>' : ''}</span>${rowMeta(item, cfg)}</span>
+        <span class="g-text"><span class="g-name">${esc(g.name)}${g.pinned ? ' <span class="pin">★</span>' : ''}${item.bonus ? ' <span class="chip exceeded">⭐ Bonus</span>' : ''}</span>${rowMeta(item, cfg)}</span>
       </button>
       ${controls}
     </div>
@@ -138,9 +138,11 @@ function goalRow(item, ro) {
 }
 
 function groupCount(items) {
-  const counted = items.filter((i) => i.hasTarget && i.status !== 'excused');
-  if (!counted.length) return `${items.length}`;
-  return `${counted.filter((i) => i.met).length} of ${counted.length} met`;
+  const counted = items.filter((i) => i.hasTarget && i.status !== 'excused' && !i.bonus);
+  const bonusDone = items.filter((i) => i.bonus && i.status === 'logged' && (i.credit || 0) > 0).length;
+  const extra = bonusDone ? ` · ⭐ ${bonusDone}` : '';
+  if (!counted.length) return bonusDone ? `⭐ ${bonusDone} bonus` : `${items.length}`;
+  return `${counted.filter((i) => i.met).length} of ${counted.length} met${extra}`;
 }
 
 function groupItems(items) {
@@ -179,6 +181,7 @@ export function renderToday() {
     scoreSub = ds.provisional && ds.pendingCount
       ? `so far · ${ds.pendingCount} left`
       : `${ds.metCount} of ${ds.scheduledCount - ds.excusedCount} met${ds.excusedCount ? ` · ${ds.excusedCount} excused` : ''}`;
+    if (ds.bonusDone) scoreSub += ` · ⭐ +${Math.round(ds.bonusPoints)} bonus`;
   }
 
   const activeGoals = state.goals.filter((g) => g.state === 'active');
@@ -451,20 +454,29 @@ export const todayActions = {
   breakdown() {
     const ds = dayScore(app.state, app.ui.date, app.today);
     if (ds.score == null) return;
-    const rows = [...ds.breakdown].sort((a, b) => b.lost - a.lost || b.share - a.share);
+    const regular = ds.breakdown.filter((b) => !b.bonus).sort((a, b) => b.lost - a.lost || b.share - a.share);
+    const bonus = ds.breakdown.filter((b) => b.bonus);
+    const base = (100 * ds.earned) / ds.weightSum;
+    const lostSum = regular.reduce((a, b) => a + b.lost, 0);
+    const name = (b) => `${esc(b.item.goal.icon || '')} ${esc(b.item.goal.name)}`;
     openSheet(`
       <div class="sheet-head"><h2>${pct(ds.score)} · ${esc(dayTitle(app.ui.date))}</h2><button class="x" data-a="closeSheet" aria-label="Close">✕</button></div>
       <p class="muted small">Each goal is worth its share of the day (set by its importance). Points earned + points lost = 100.</p>
       <table class="tbl">
         <thead><tr><th>Goal</th><th class="num">Worth</th><th class="num">Earned</th><th class="num">Lost</th></tr></thead>
-        <tbody>${rows.map((b) => `<tr>
-          <td>${esc(b.item.goal.icon || '')} ${esc(b.item.goal.name)}
+        <tbody>${regular.map((b) => `<tr>
+          <td>${name(b)}
             ${b.item.parts?.length ? `<div class="muted small">${b.item.parts.filter((p) => p.counted).map((p) => `${esc(partMeta(b.item.goal, p.partId).name)} ${p.excused ? 'excused' : pct(Math.min(1, p.credit || 0))}`).join(' · ')}</div>` : ''}</td>
           <td class="num">${b.share.toFixed(1)}</td><td class="num">${b.contribution.toFixed(1)}</td>
           <td class="num ${b.lost > 0.05 ? 'lost' : ''}">${b.lost > 0.05 ? b.lost.toFixed(1) : '—'}</td></tr>`).join('')}
         </tbody>
-        <tfoot><tr><td>Total</td><td class="num">100</td><td class="num">${(ds.score * 100).toFixed(1)}</td><td class="num">${(100 - Math.min(100, ds.score * 100)).toFixed(1)}</td></tr></tfoot>
+        <tfoot><tr><td>${bonus.length ? 'Goals' : 'Total'}</td><td class="num">100</td><td class="num">${base.toFixed(1)}</td><td class="num">${lostSum.toFixed(1)}</td></tr></tfoot>
       </table>
+      ${bonus.length ? `<table class="tbl bonus-tbl">
+        <tbody>${bonus.map((b) => `<tr><td>⭐ ${name(b)}</td><td class="num bonus-pts">+${b.contribution.toFixed(1)}</td></tr>`).join('')}</tbody>
+        <tfoot><tr><td>Day score</td><td class="num">${(ds.score * 100).toFixed(1)}</td></tr></tfoot>
+      </table>
+      <p class="muted small">Bonus goals only add points. ${base + ds.bonusPoints > 100.05 ? `You earned ${(base + ds.bonusPoints).toFixed(1)}, but a day tops out at 100.` : 'Skipping a bonus never costs anything.'}</p>` : ''}
       ${ds.excusedCount ? `<p class="muted small">${ds.excusedCount} excused goal(s) left out of this day.</p>` : ''}
       ${ds.extra.length ? `<p class="muted small">Extra (not scheduled, not scored): ${ds.extra.map((i) => esc(i.goal.name)).join(', ')}</p>` : ''}`);
   },

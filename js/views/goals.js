@@ -19,6 +19,7 @@ export function goalBadges(g) {
   else if (inPause(g, t)) b.push(['Paused', 'partial']);
   const v = g.versions[g.versions.length - 1];
   if (!v.scored) b.push(['Not in score', 'muted']);
+  else if (v.bonus) b.push(['⭐ Bonus', 'exceeded']);
   return b.map(([t2, c]) => `<span class="chip ${c}">${esc(t2)}</span>`).join(' ');
 }
 
@@ -99,7 +100,8 @@ function diffText(goal, a, b) {
   if (JSON.stringify(a.schedule) !== JSON.stringify(b.schedule)) out.push(`days: ${scheduleText(a.schedule)} → ${scheduleText(b.schedule)}`);
   if (a.credit !== b.credit) out.push(b.credit === 'all' ? 'now all or nothing' : 'now partial credit');
   if (Number(a.cap || 1) !== Number(b.cap || 1)) out.push(`extra credit ${Math.round((a.cap || 1) * 100)}% → ${Math.round((b.cap || 1) * 100)}%`);
-  if (!!a.scored !== !!b.scored) out.push(b.scored ? 'now counts toward score' : 'no longer counts toward score');
+  const mode = (x) => (!x.scored ? 'not counted' : x.bonus ? 'bonus' : 'counts');
+  if (mode(a) !== mode(b)) out.push(`score: ${mode(a)} → ${mode(b)}`);
   if (JSON.stringify(a.parts || []) !== JSON.stringify(b.parts || [])) {
     const an = (na.parts || []).map((p) => p.name).join(', ') || 'none', bn = (nb.parts || []).map((p) => p.name).join(', ') || 'none';
     if (an !== bn) out.push(`parts: ${an} → ${bn}`);
@@ -227,7 +229,7 @@ export function renderGoalDetail() {
       ${rankCount > 1 ? `<div class="tile"><div class="tile-num">${rankIdx >= 0 ? `#${rankIdx + 1}<span class="of">/${rankCount}</span>` : '—'}</div><div class="tile-label">${rankIdx === 0 ? 'Your most consistent goal' : rankIdx === rankCount - 1 ? 'Your least consistent goal' : rankIdx >= 0 ? 'Consistency rank' : 'Not enough days to rank'}</div></div>` : ''}
       ${measure ? `<div class="tile"><div class="tile-num">${gs?.avgValue != null ? esc(fmtValue(gs.avgValue, measure)) : '—'}</div><div class="tile-label">Average logged</div></div>
       <div class="tile"><div class="tile-num">${gs?.values?.length ? esc(fmtValue(gs.total, measure)) : '—'}</div><div class="tile-label">Total</div></div>` : ''}
-      ${v.scored ? `<div class="tile"><div class="tile-num">${gs ? gs.lost.toFixed(1) : '—'}</div><div class="tile-label">Points lost / day</div></div>` : ''}
+      ${v.scored && !v.bonus ? `<div class="tile"><div class="tile-num">${gs ? gs.lost.toFixed(1) : '—'}</div><div class="tile-label">Points lost / day</div></div>` : ''}
       ${gs?.excused ? `<div class="tile"><div class="tile-num">${gs.excused}</div><div class="tile-label">Excused</div></div>` : ''}
     </div>
     <section class="card"><h3>Consistency</h3>${occurrenceStrip(items)}</section>

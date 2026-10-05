@@ -355,6 +355,8 @@ form.inline { margin-top: 12px; flex-wrap: nowrap; }
 .tbl .num { text-align: right; font-variant-numeric: tabular-nums; white-space: nowrap; }
 .tbl .lost { color: var(--missed); font-weight: 600; }
 .tbl tr.clickable { cursor: pointer; }
+.bonus-tbl { margin-top: 10px; }
+.bonus-pts { color: var(--exceeded); font-weight: 650; }
 .hbars { display: flex; flex-direction: column; gap: 8px; }
 .hbar { display: grid; grid-template-columns: minmax(0, 9em) 1fr 3.4em; align-items: center; gap: 8px; font-size: .88rem; }
 .hbar[data-a] { cursor: pointer; }

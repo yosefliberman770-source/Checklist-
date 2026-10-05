@@ -1,6 +1,6 @@
 // Offline support: serve the app from cache, refresh the cache in the
 // background. Bump VERSION whenever app files change.
-const VERSION = 'myday-v3';
+const VERSION = 'myday-v4';
 const FILES = [
   './', './index.html', './manifest.webmanifest', './css/app.css',
   './js/main.js', './js/ctx.js', './js/store.js', './js/engine.js', './js/format.js', './js/util.js', './js/charts.js',

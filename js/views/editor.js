@@ -28,7 +28,7 @@ const TARGET_TYPES = [
 ];
 
 const MEANING_KEYS = ['kind', 'unit', 'precision', 'allowNegative', 'target', 'dayTargets', 'credit', 'cap',
-  'weight', 'scored', 'schedule', 'parts', 'partMode', 'partWeighting'];
+  'weight', 'scored', 'bonus', 'schedule', 'parts', 'partMode', 'partWeighting'];
 
 function guessPreset(cfg) {
   if (cfg.kind === 'check') return 'check';
@@ -57,7 +57,7 @@ export function newDraft() {
     isNew: true, name: '', shortName: '', description: '', notes: '', icon: '', color: '', categoryId: '',
     pinned: false, step: '', start: app.today, end: '', preset: 'check',
     kind: 'check', unit: '', precision: 0, allowNegative: false, target: blankTarget(), dayTargets: {},
-    credit: 'partial', cap: 1, weight: 2, scored: true,
+    credit: 'partial', cap: 1, weight: 2, scored: true, bonus: false,
     schedule: { type: 'daily', days: [1, 2, 3, 4, 5], every: 2, anchor: '', dates: [] },
     parts: [], partMode: 'each', partWeighting: 'target', _newDate: app.today,
   };
@@ -122,6 +122,7 @@ export function configFromDraft(d) {
     cap: base.target.type === 'atLeast' && base.credit === 'partial' ? Number(d.cap) || 1 : 1,
     weight: Number(d.weight) > 0 ? Number(d.weight) : 2,
     scored: !!d.scored,
+    bonus: !!d.scored && !!d.bonus,
     schedule: cleanSchedule(d.schedule),
     parts: [],
     partMode: 'each',
@@ -325,20 +326,22 @@ function partCard(p, i, d) {
   </div>`;
 }
 
+// The goal's share of a typical scheduled day. For a bonus goal: how much it
+// can add on top, relative to the regular goals that day.
 function shareOfDay(d, cfg) {
   const temp = { id: d.id || '_draft', state: 'active', start: d.start, end: d.end || null, pauses: [], versions: [{ ...cfg, from: d.start }] };
   for (let k = 0; k < 14; k++) {
     const date = addDays(app.today, k);
     if (!isScheduled(temp, date)) continue;
-    let W = cfg.weight;
+    let W = cfg.bonus ? 0 : cfg.weight;
     for (const g of app.state.goals) {
       if (g.id === d.id || g.state !== 'active') continue;
       const v = versionFor(g, date);
-      const scoredGoal = v.scored && v.schedule?.type !== 'anytime' &&
+      const scoredGoal = v.scored && !v.bonus && v.schedule?.type !== 'anytime' &&
         (v.parts?.length ? v.parts.some((p) => !p.optional && hasTarget(p)) : hasTarget(v));
       if (scoredGoal && isScheduled(g, date, v)) W += Number(v.weight) || 0;
     }
-    return { share: cfg.weight / W, date };
+    return { share: W > 0 ? cfg.weight / W : null, date };
   }
   return null;
 }
@@ -351,7 +354,12 @@ function summaryHtml(d) {
     (cfg.parts.length ? cfg.parts.some((p) => !p.optional && hasTarget(p)) : hasTarget(cfg));
   if (scorable && validate({ ...d, name: d.name || 'x' }).length === 0) {
     const s = shareOfDay(d, cfg);
-    if (s) html += `<div class="muted small">Worth about ${Math.round(s.share * 100)}% of ${s.date === app.today ? 'today\'s' : DAY_LONG[weekday(s.date)] + '\'s'} score.</div>`;
+    const day = s ? (s.date === app.today ? 'today\'s' : DAY_LONG[weekday(s.date)] + '\'s') : '';
+    if (s && cfg.bonus) {
+      html += s.share == null
+        ? `<div class="muted small">No regular goals on ${day.replace('\'s', '')} yet, so there's nothing for this bonus to add to.</div>`
+        : `<div class="muted small">Can add up to about ${Math.round(s.share * 100)}% to ${day} score (never above 100%).</div>`;
+    } else if (s) html += `<div class="muted small">Worth about ${Math.round(s.share * 100)}% of ${day} score.</div>`;
   }
   return html;
 }
@@ -395,7 +403,9 @@ export function renderEditor() {
       <div class="field"><span>Which days?</span>${scheduleFields(d.schedule)}</div>
 
       <div class="field"><span>How much does it matter?</span>${weightSeg('weight', d.weight)}
-        <p class="muted small">Each step counts twice as much as the one before. Only this affects your score — not the target or difficulty.</p></div>
+        <p class="muted small">${d.bonus ? 'For a bonus goal this sets how much it can add.' : 'Each step counts twice as much as the one before. Only this affects your score — not the target or difficulty.'}</p></div>
+
+      ${scoreModeField(d)}
 
       ${categoryField(d)}
 
@@ -410,7 +420,6 @@ export function renderEditor() {
         <label class="field"><span>Short name</span><input type="text" data-bind="shortName" value="${val(d.shortName)}" placeholder="Used in tight spaces"></label>
         <label class="field"><span>Description</span><textarea data-bind="description" rows="2">${esc(d.description)}</textarea></label>
         <label class="check-field"><input type="checkbox" data-bind="pinned" data-type="bool" ${d.pinned ? 'checked' : ''}> Pin to the top</label>
-        <label class="check-field"><input type="checkbox" data-bind="scored" data-type="bool" data-rr ${d.scored ? 'checked' : ''}> <span>Counts toward my score <span class="muted small">(off = tracked only)</span></span></label>
         ${hasParts ? '' : creditFields(d, '', { allowCap: true })}
         ${dayTargetFields(d)}
         <div class="grid2">
@@ -447,6 +456,19 @@ export function renderEditor() {
       </details>
     </div>
     ${d.isNew ? '' : `<div class="center"><button class="link" data-a="nav" data-href="#goal/${d.id}">View this goal's history and actions</button></div>`}`;
+}
+
+function scoreModeField(d) {
+  const mode = !d.scored ? 'off' : d.bonus ? 'bonus' : 'counts';
+  const help = {
+    counts: 'Missing it lowers your day score.',
+    bonus: 'Doing it raises your day score; skipping it never lowers it. Your day still tops out at 100%.',
+    off: 'Tracked only — it shows in your stats but never affects your score.',
+  }[mode];
+  const btn = (m, l) => `<button type="button" class="${mode === m ? 'on' : ''}" data-a="edScoreMode" data-m="${m}">${l}</button>`;
+  return `<div class="field"><span>In your day score</span>
+    <div class="seg">${btn('counts', 'Counts')}${btn('bonus', '⭐ Bonus')}${btn('off', 'Not counted')}</div>
+    <p class="muted small">${help}</p></div>`;
 }
 
 function categoryField(d) {
@@ -647,6 +669,15 @@ export const editorActions = {
     const d = app.ui.draft;
     const v = el.dataset.v;
     setPath(d, el.dataset.path, /^-?\d+(\.\d+)?$/.test(v) ? Number(v) : v);
+    app.render();
+  },
+  edScoreMode(el) {
+    const d = app.ui.draft;
+    d.scored = el.dataset.m !== 'off';
+    const toBonus = el.dataset.m === 'bonus' && !d.bonus;
+    d.bonus = el.dataset.m === 'bonus';
+    // Bonus goals start small; the user can raise it.
+    if (toBonus && Number(d.weight) === 2) d.weight = 1;
     app.render();
   },
   edCat(el) {
