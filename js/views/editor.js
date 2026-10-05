@@ -5,6 +5,7 @@
 import { app, openSheet, closeSheet, toast, go, PALETTE } from '../ctx.js';
 import { WEIGHTS, applyVersion, evaluate, versionFor, isScheduled, hasTarget, totalModeAllowed, partsShareUnit } from '../engine.js';
 import { describe, pct, statusLabel } from '../format.js';
+import { sortedCats, catLabel, findCatByName, createCategory } from './categories.js';
 import { esc, uid, deepClone, DAY_SHORT, DAY_LONG, addDays, weekday, fmtDate } from '../util.js';
 
 const PRESETS = [
@@ -370,7 +371,6 @@ function previewHtml(d) {
 export function renderEditor() {
   const d = app.ui.draft;
   if (!d) { go('#goals'); return ''; }
-  const cats = [...app.state.categories].sort((a, b) => a.order - b.order);
   const hasParts = d.parts.length > 0;
   const sameUnit = partsShareUnit(d.parts);
   const totalOk = totalModeAllowed(configFromDraft(d).parts);
@@ -397,6 +397,8 @@ export function renderEditor() {
       <div class="field"><span>How much does it matter?</span>${weightSeg('weight', d.weight)}
         <p class="muted small">Each step counts twice as much as the one before. Only this affects your score — not the target or difficulty.</p></div>
 
+      ${categoryField(d)}
+
       ${previewHtml(d)}
 
       <details class="more"${d._moreOpen ? ' open' : ''} data-toggle="_moreOpen"><summary>More options</summary>
@@ -405,12 +407,6 @@ export function renderEditor() {
           <label class="field"><span>Color</span><span class="inline"><input type="color" data-bind="color" data-rr value="${val(d.color || PALETTE[app.state.goals.length % PALETTE.length])}">
             ${d.color ? '<button type="button" class="link small" data-a="edSet" data-path="color" data-v="">Auto</button>' : '<span class="muted small">auto</span>'}</span></label>
         </div>
-        <label class="field"><span>Category</span>
-          <select data-bind="categoryId" data-rr>
-            <option value="">Uncategorized</option>
-            ${cats.map((c) => `<option value="${c.id}"${c.id === d.categoryId ? ' selected' : ''}>${esc(c.name)}</option>`).join('')}
-            <option value="__new">+ New category…</option>
-          </select></label>
         <label class="field"><span>Short name</span><input type="text" data-bind="shortName" value="${val(d.shortName)}" placeholder="Used in tight spaces"></label>
         <label class="field"><span>Description</span><textarea data-bind="description" rows="2">${esc(d.description)}</textarea></label>
         <label class="check-field"><input type="checkbox" data-bind="pinned" data-type="bool" ${d.pinned ? 'checked' : ''}> Pin to the top</label>
@@ -451,6 +447,23 @@ export function renderEditor() {
       </details>
     </div>
     ${d.isNew ? '' : `<div class="center"><button class="link" data-a="nav" data-href="#goal/${d.id}">View this goal's history and actions</button></div>`}`;
+}
+
+function categoryField(d) {
+  const cats = sortedCats();
+  const chip = (id, label) => `<button type="button" class="chip-btn${(d.categoryId || '') === id ? ' on' : ''}" data-a="edCat" data-id="${id}">${label}</button>`;
+  return `<div class="field"><span>Category <em class="muted">(optional)</em></span>
+    <div class="chips wrap">
+      ${chip('', 'None')}
+      ${cats.map((c) => chip(c.id, catLabel(c))).join('')}
+      ${d._newCat ? '' : '<button type="button" class="chip-btn dashed" data-a="edCatNew">+ New</button>'}
+    </div>
+    ${d._newCat ? `<div class="inline newcat">
+      <input type="text" id="ed-newcat" placeholder="New category name" autocomplete="off" autofocus>
+      <button type="button" class="btn small primary" data-a="edCatAdd">Add</button>
+      <button type="button" class="link small" data-a="edCatCancel">Cancel</button></div>
+      <div id="ed-caterr"></div>` : ''}
+  </div>`;
 }
 
 // ---------- binding ----------
@@ -513,17 +526,6 @@ export function editorBind(el, rerender) {
   let v = el.type === 'checkbox' ? el.checked : el.value;
   if (el.dataset.type === 'num') v = numOrNull(v) ?? '';
   if (path === 'preset') { applyPreset(d, v); app.render(); return; }
-  if (path === 'categoryId' && v === '__new') {
-    const name = (prompt('Name for the new category') || '').trim();
-    if (name) {
-      const c = { id: uid(), name, order: app.state.categories.length };
-      app.state.categories.push(c);
-      app.save();
-      d.categoryId = c.id;
-    }
-    app.render();
-    return;
-  }
   if (/^parts\.\d+\.kind$/.test(path)) {
     const p = getPath(d, path.replace(/\.kind$/, ''));
     p.kind = v;
@@ -646,6 +648,34 @@ export const editorActions = {
     const v = el.dataset.v;
     setPath(d, el.dataset.path, /^-?\d+(\.\d+)?$/.test(v) ? Number(v) : v);
     app.render();
+  },
+  edCat(el) {
+    const d = app.ui.draft;
+    d.categoryId = el.dataset.id || '';
+    d._newCat = false;
+    app.render();
+  },
+  edCatNew() {
+    app.ui.draft._newCat = true;
+    app.render();
+    document.getElementById('ed-newcat')?.focus();
+  },
+  edCatCancel() {
+    app.ui.draft._newCat = false;
+    app.render();
+  },
+  edCatAdd() {
+    const d = app.ui.draft;
+    const inp = document.getElementById('ed-newcat');
+    const name = (inp?.value || '').trim();
+    if (!name) { inp?.focus(); return; }
+    const existing = findCatByName(name);
+    const c = existing || createCategory(name);
+    if (!existing) app.save();
+    d.categoryId = c.id;
+    d._newCat = false;
+    app.render();
+    toast(existing ? `"${existing.name}" already exists — selected it` : `Category "${name}" created`);
   },
   edDay(el) {
     const s = app.ui.draft.schedule;

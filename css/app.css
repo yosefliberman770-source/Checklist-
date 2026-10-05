@@ -298,9 +298,29 @@ details.sub > summary { padding: 8px 0; font-weight: 600; cursor: pointer; }
 .part-card { border: 1px solid var(--line); border-radius: 12px; padding: 10px; margin: 10px 0; background: var(--bg); }
 .part-head { display: flex; gap: 6px; align-items: center; margin-bottom: 8px; }
 .part-head input { flex: 1; font-weight: 600; }
-.cat-row { display: flex; gap: 6px; align-items: center; margin: 8px 0; }
-.cat-row input { flex: 1; }
 form.inline { margin-top: 12px; flex-wrap: nowrap; }
+
+/* ---------- categories ---------- */
+.chips.wrap { flex-wrap: wrap; }
+.chip-btn.dashed { border-style: dashed; color: var(--accent); }
+.newcat { margin-top: 8px; flex-wrap: nowrap; }
+.newcat input { flex: 1; min-width: 0; }
+.group-head { display: flex; width: 100%; justify-content: space-between; align-items: center; gap: 8px; text-align: left; }
+.group-count { font-size: .78rem; font-weight: 600; text-transform: none; letter-spacing: 0; color: var(--muted); }
+.group-head-row { display: flex; align-items: baseline; justify-content: space-between; gap: 8px; margin: 14px 2px 6px; }
+.group-head-row .group-title { margin: 0; }
+.empty-cat { border: 1px dashed var(--line); border-radius: var(--radius); padding: 12px; margin-bottom: 8px; }
+.cat-list { margin-top: 12px; }
+.cat-item { display: flex; align-items: center; gap: 6px; border-top: 1px solid var(--line); padding: 6px 0; }
+.cat-open { flex: 1; min-width: 0; display: flex; flex-direction: column; align-items: flex-start; gap: 2px; background: none; border: 0; padding: 8px 2px; text-align: left; min-height: 48px; }
+.cat-name { font-weight: 600; overflow-wrap: anywhere; }
+.cat-fields { display: grid; grid-template-columns: 4.5em 1fr; gap: 0 10px; }
+.cat-icon-field input { text-align: center; padding: 10px 4px; }
+.cat-goals { display: flex; flex-direction: column; border: 1px solid var(--line); border-radius: 12px; overflow: hidden; }
+.cat-goal { display: flex; align-items: center; gap: 10px; padding: 10px 12px; min-height: 48px; border-top: 1px solid var(--line); }
+.cat-goal:first-child { border-top: 0; }
+.cat-goal input { width: 22px; height: 22px; flex: none; }
+.cat-goal-name { flex: 1; overflow-wrap: anywhere; }
 
 /* ---------- goals list ---------- */
 .list-row { padding: 6px 8px; }

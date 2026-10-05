@@ -1,11 +1,11 @@
 // Offline support: serve the app from cache, refresh the cache in the
 // background. Bump VERSION whenever app files change.
-const VERSION = 'myday-v2';
+const VERSION = 'myday-v3';
 const FILES = [
   './', './index.html', './manifest.webmanifest', './css/app.css',
   './js/main.js', './js/ctx.js', './js/store.js', './js/engine.js', './js/format.js', './js/util.js', './js/charts.js',
   './js/views/today.js', './js/views/editor.js', './js/views/goals.js', './js/views/stats.js',
-  './js/views/history.js', './js/views/settings.js',
+  './js/views/history.js', './js/views/settings.js', './js/views/categories.js',
   './icons/icon.svg', './icons/icon-192.png', './icons/icon-512.png', './icons/apple-touch-icon.png',
 ];
 

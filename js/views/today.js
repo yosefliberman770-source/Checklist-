@@ -1,6 +1,7 @@
 // The daily screen: log what actually happened.
 
 import { app, openSheet, closeSheet, toast, goalColor } from '../ctx.js';
+import { sortedCats, catLabel } from './categories.js';
 import { dayScore, effectiveTarget, evaluate, versionFor } from '../engine.js';
 import { getRec, setRec } from '../store.js';
 import { esc, addDays, fmtDate } from '../util.js';
@@ -136,6 +137,12 @@ function goalRow(item, ro) {
   </div>`;
 }
 
+function groupCount(items) {
+  const counted = items.filter((i) => i.hasTarget && i.status !== 'excused');
+  if (!counted.length) return `${items.length}`;
+  return `${counted.filter((i) => i.met).length} of ${counted.length} met`;
+}
+
 function groupItems(items) {
   const { state } = app;
   const order = (a, b) => (a.goal.order ?? 0) - (b.goal.order ?? 0);
@@ -145,10 +152,10 @@ function groupItems(items) {
   const groups = [];
   if (pinned.length) groups.push({ id: '_pinned', name: 'Pinned', items: pinned });
   if (state.settings.groupByCategory && state.categories.length) {
-    const cats = [...state.categories].sort((a, b) => a.order - b.order);
+    const cats = sortedCats();
     for (const c of cats) {
       const its = rest.filter((i) => i.goal.categoryId === c.id);
-      if (its.length) groups.push({ id: c.id, name: c.name, items: its });
+      if (its.length) groups.push({ id: c.id, name: catLabel(c), items: its });
     }
     const unc = rest.filter((i) => !cats.some((c) => c.id === i.goal.categoryId));
     if (unc.length) groups.push({ id: '_unc', name: 'Uncategorized', items: unc });
@@ -197,7 +204,9 @@ export function renderToday() {
     ${ds.skipped ? `<div class="notice">This day is skipped and left out of your averages. <button class="link" data-a="skipDay" ${ro}>Undo</button></div>` : ''}
     ${groups.map((gr) => `
       <section class="group">
-        ${gr.name ? `<button class="group-head" data-a="collapse" data-id="${gr.id}">${state.collapsed[gr.id] ? '▸' : '▾'} ${esc(gr.name)} <span class="muted">${gr.items.length}</span></button>` : ''}
+        ${gr.name ? `<button class="group-head" data-a="collapse" data-id="${gr.id}" aria-expanded="${!state.collapsed[gr.id]}">
+          <span>${state.collapsed[gr.id] ? '▸' : '▾'} ${gr.id === '_pinned' || gr.id === '_unc' || gr.id === '_all' ? esc(gr.name) : gr.name}</span>
+          <span class="group-count">${groupCount(gr.items)}</span></button>` : ''}
         ${state.collapsed[gr.id] ? '' : gr.items.map((i) => goalRow(i, ro)).join('')}
       </section>`).join('')}
     ${!ds.items.length ? '<p class="muted center">No goals are scheduled for this day.</p>' : ''}

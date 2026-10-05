@@ -3,10 +3,11 @@
 import { app, openSheet, closeSheet, toast, go, goalColor } from '../ctx.js';
 import { inPause, periodStats, consistencyRanking, goalDay, partsShareUnit, effectiveTarget } from '../engine.js';
 import { describe, fmtValue, pct, targetText, weightLabel, scheduleText, statusLabel } from '../format.js';
-import { esc, uid, addDays, fmtDate, dateRange } from '../util.js';
+import { esc, addDays, fmtDate, dateRange } from '../util.js';
 import { countRecords, deleteGoalForever } from '../store.js';
 import { valueBars } from '../charts.js';
 import { periodChips, periodRange } from './stats.js';
+import { sortedCats, catLabel } from './categories.js';
 
 export function goalBadges(g) {
   const t = app.today;
@@ -41,12 +42,12 @@ function goalListRow(g, list, idx) {
   </div>`;
 }
 
-function groupsOf(goals) {
-  const cats = [...app.state.categories].sort((a, b) => a.order - b.order);
+function groupsOf(goals, { includeEmpty = false } = {}) {
+  const cats = sortedCats();
   const sorted = [...goals].sort((a, b) => (a.order ?? 0) - (b.order ?? 0));
-  const groups = cats.map((c) => ({ id: c.id, name: c.name, goals: sorted.filter((g) => g.categoryId === c.id) }));
-  groups.push({ id: '', name: cats.length ? 'Uncategorized' : '', goals: sorted.filter((g) => !cats.some((c) => c.id === g.categoryId)) });
-  return groups.filter((g) => g.goals.length);
+  const groups = cats.map((c) => ({ id: c.id, cat: c, goals: sorted.filter((g) => g.categoryId === c.id) }));
+  groups.push({ id: '', cat: null, goals: sorted.filter((g) => !cats.some((c) => c.id === g.categoryId)) });
+  return groups.filter((g) => g.goals.length || (includeEmpty && g.cat));
 }
 
 export function renderGoals() {
@@ -54,37 +55,33 @@ export function renderGoals() {
   const active = state.goals.filter((g) => g.state === 'active');
   const archived = state.goals.filter((g) => g.state === 'archived');
   const trash = state.goals.filter((g) => g.state === 'trash');
-  return `<div class="topbar"><h1>Goals</h1><button class="btn primary small" data-a="nav" data-href="#new">+ New</button></div>
+  const hasCats = state.categories.length > 0;
+  const groupHead = (gr) => {
+    if (!gr.cat) return hasCats ? '<div class="group-head-row"><h3 class="group-title">Uncategorized</h3></div>' : '';
+    return `<div class="group-head-row">
+      <h3 class="group-title">${catLabel(gr.cat)}${gr.goals.length ? ` <span class="muted">${gr.goals.length}</span>` : ''}</h3>
+      <button class="link small" data-a="catOpen" data-id="${gr.cat.id}" data-list="0">Edit</button></div>`;
+  };
+  return `<div class="topbar"><h1>Goals</h1>
+      <button class="btn small" data-a="catList">Categories</button>
+      <button class="btn primary small" data-a="nav" data-href="#new">+ Goal</button></div>
     ${!active.length ? `<div class="empty-state"><p>No active goals yet. Your goals, your rules — create the first one.</p>
       <button class="btn primary" data-a="nav" data-href="#new">+ Create a goal</button></div>` : ''}
-    ${groupsOf(active).map((gr) => `<section class="group">
-      ${gr.name ? `<h3 class="group-title">${esc(gr.name)}</h3>` : ''}
-      ${gr.goals.map((g, i) => goalListRow(g, gr.goals, i)).join('')}
+    ${active.length >= 3 && !hasCats ? `<div class="notice small">Tip: group your goals into categories, named however you like.
+      <button class="link small" data-a="catNew">+ Create a category</button></div>` : ''}
+    ${groupsOf(active, { includeEmpty: true }).map((gr) => `<section class="group">
+      ${groupHead(gr)}
+      ${gr.goals.length ? gr.goals.map((g, i) => goalListRow(g, gr.goals, i)).join('')
+        : `<div class="empty-cat muted small">No goals here yet.
+            <button class="link small" data-a="catOpen" data-id="${gr.cat.id}" data-list="0">Choose goals</button> or
+            <button class="link small" data-a="nav" data-href="#new/${gr.cat.id}">create one</button></div>`}
     </section>`).join('')}
-    <div class="center"><button class="btn" data-a="categories">Manage categories</button></div>
     ${archived.length ? `<details class="group"><summary>Archived <span class="muted">${archived.length}</span></summary>
       <p class="muted small">No longer tracked. All their history is kept and still shows in your past scores.</p>
       ${archived.map((g, i) => goalListRow(g, archived, i)).join('')}</details>` : ''}
     ${trash.length ? `<details class="group"><summary>Trash <span class="muted">${trash.length}</span></summary>
       <p class="muted small">Deleted for good 30 days after being moved here. While here they don't count anywhere.</p>
       ${trash.map((g, i) => goalListRow(g, trash, i)).join('')}</details>` : ''}`;
-}
-
-function categoriesSheet() {
-  const cats = [...app.state.categories].sort((a, b) => a.order - b.order);
-  openSheet(`
-    <div class="sheet-head"><h2>Categories</h2><button class="x" data-a="closeSheet" aria-label="Close">✕</button></div>
-    <p class="muted small">Categories only organize your goals. They never change scores.</p>
-    ${cats.map((c, i) => `<div class="cat-row">
-      <input type="text" value="${esc(c.name)}" data-change="catRename" data-id="${c.id}" aria-label="Category name">
-      <button class="icon-btn" data-a="catMove" data-id="${c.id}" data-d="-1" ${i === 0 ? 'disabled' : ''} aria-label="Move up">↑</button>
-      <button class="icon-btn" data-a="catMove" data-id="${c.id}" data-d="1" ${i === cats.length - 1 ? 'disabled' : ''} aria-label="Move down">↓</button>
-      <button class="icon-btn danger-text" data-a="catDelete" data-id="${c.id}" aria-label="Delete">✕</button>
-    </div>`).join('') || '<p class="muted">No categories yet.</p>'}
-    <form data-submit="catAdd" class="inline">
-      <input type="text" name="name" placeholder="New category" required>
-      <button class="btn small primary" type="submit">Add</button>
-    </form>`);
 }
 
 // ---------- goal detail ----------
@@ -213,7 +210,7 @@ export function renderGoalDetail() {
       ${isTrash ? '<span></span>' : `<button class="btn small" data-a="nav" data-href="#edit/${goal.id}">Edit</button>`}</div>
     <section class="card summary-box" style="--gc:${goalColor(goal, state.goals.indexOf(goal))}">
       <div class="summary-sentence">${esc(describe(cfgWithNames(goal, v)))}</div>
-      <div class="muted small">${cat ? esc(cat.name) + ' · ' : ''}since ${fmtDate(goal.start, { year: true })}${goal.end ? ` · until ${fmtDate(goal.end, { year: true })}` : ''} ${goalBadges(goal)}</div>
+      <div class="muted small">${cat ? catLabel(cat) + ' · ' : ''}since ${fmtDate(goal.start, { year: true })}${goal.end ? ` · until ${fmtDate(goal.end, { year: true })}` : ''} ${goalBadges(goal)}</div>
       ${goal.description ? `<p class="small">${esc(goal.description)}</p>` : ''}
     </section>
     <div class="row-btns wrap">
@@ -252,23 +249,6 @@ export function renderGoalDetail() {
 const findGoal = () => app.state.goals.find((g) => g.id === app.ui.param);
 
 export const goalActions = {
-  categories() { categoriesSheet(); },
-  catMove(el) {
-    const cats = [...app.state.categories].sort((a, b) => a.order - b.order);
-    const i = cats.findIndex((c) => c.id === el.dataset.id), j = i + Number(el.dataset.d);
-    if (j < 0 || j >= cats.length) return;
-    [cats[i], cats[j]] = [cats[j], cats[i]];
-    cats.forEach((c, k) => { c.order = k; });
-    app.save(); categoriesSheet(); app.render();
-  },
-  catDelete(el) {
-    const c = app.state.categories.find((x) => x.id === el.dataset.id);
-    const n = app.state.goals.filter((g) => g.categoryId === c.id).length;
-    if (!confirm(`Delete "${c.name}"?${n ? ` Its ${n} goal(s) become uncategorized — nothing else changes.` : ''}`)) return;
-    app.state.categories = app.state.categories.filter((x) => x.id !== c.id);
-    for (const g of app.state.goals) if (g.categoryId === c.id) g.categoryId = null;
-    app.save(); categoriesSheet(); app.render();
-  },
   goalMove(el) {
     const g = app.state.goals.find((x) => x.id === el.dataset.g);
     const group = groupsOf(app.state.goals.filter((x) => x.state === 'active')).find((gr) => gr.goals.includes(g)).goals;
@@ -358,12 +338,6 @@ export const goalActions = {
 };
 
 export const goalSubmit = {
-  catAdd(form) {
-    const name = form.name.value.trim();
-    if (!name) return;
-    app.state.categories.push({ id: uid(), name, order: app.state.categories.length });
-    app.save(); categoriesSheet(); app.render();
-  },
   pauseSave(form) {
     const g = findGoal();
     const start = form.start.value, end = form.end.value || null;
@@ -375,12 +349,3 @@ export const goalSubmit = {
     app.commit();
   },
 };
-
-export const goalChange = {
-  catRename(el) {
-    const c = app.state.categories.find((x) => x.id === el.dataset.id);
-    const name = el.value.trim();
-    if (c && name) { c.name = name; app.save(); app.render(); }
-  },
-};
-

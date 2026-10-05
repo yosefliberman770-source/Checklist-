@@ -5,7 +5,8 @@ import { loadState, requestPersistence } from './store.js';
 import { todayStr, esc } from './util.js';
 import { renderToday, todayActions, todayChange, todayInput, todaySubmit } from './views/today.js';
 import { renderEditor, editorActions, editorSubmit, editorBind, newDraft, draftFromGoal } from './views/editor.js';
-import { renderGoals, renderGoalDetail, goalActions, goalSubmit, goalChange } from './views/goals.js';
+import { renderGoals, renderGoalDetail, goalActions, goalSubmit } from './views/goals.js';
+import { categoryActions, categorySubmit } from './views/categories.js';
 import { renderStats, statsActions, statsChange } from './views/stats.js';
 import { renderHistory, historyActions } from './views/history.js';
 import { renderSettings, settingsActions, settingsChange, applySetting, applyTheme } from './views/settings.js';
@@ -17,12 +18,12 @@ const views = {
 const TAB_OF = { today: 'today', history: 'history', stats: 'stats', goals: 'goals', goal: 'goals', edit: 'goals', new: 'goals', settings: 'settings' };
 
 const actions = {
-  ...todayActions, ...editorActions, ...goalActions, ...statsActions, ...historyActions, ...settingsActions,
+  ...todayActions, ...editorActions, ...goalActions, ...categoryActions, ...statsActions, ...historyActions, ...settingsActions,
   nav: (el) => go(el.dataset.href),
   closeSheet: () => closeSheet(),
 };
-const submits = { ...todaySubmit, ...editorSubmit, ...goalSubmit };
-const changes = { ...todayChange, ...goalChange, ...statsChange, ...settingsChange };
+const submits = { ...todaySubmit, ...editorSubmit, ...goalSubmit, ...categorySubmit };
+const changes = { ...todayChange, ...statsChange, ...settingsChange };
 
 function render() {
   const view = document.getElementById('view');
@@ -45,7 +46,10 @@ function onRoute() {
   const prevRoute = app.ui.route;
   if (!views[route]) { go('#today'); return; }
   if (route === 'today') app.ui.date = param && /^\d{4}-\d{2}-\d{2}$/.test(param) ? (param > app.today ? app.today : param) : app.today;
-  if (route === 'new' && !(app.ui.draft?.isNew)) app.ui.draft = newDraft();
+  if (route === 'new' && !(app.ui.draft?.isNew)) {
+    app.ui.draft = newDraft();
+    if (param && app.state.categories.some((c) => c.id === param)) app.ui.draft.categoryId = param;
+  }
   if (route === 'edit') {
     const g = app.state.goals.find((x) => x.id === param);
     if (!g) { go('#goals'); return; }
@@ -96,6 +100,7 @@ function wire() {
   }, true);
   document.addEventListener('keydown', (e) => {
     if (e.key === 'Escape' && !document.getElementById('sheet').hidden) closeSheet();
+    if (e.key === 'Enter' && e.target.id === 'ed-newcat') { e.preventDefault(); editorActions.edCatAdd(); }
   });
   window.addEventListener('hashchange', onRoute);
   // Roll over to the new day when the app comes back after midnight.
