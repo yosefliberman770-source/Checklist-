@@ -3,7 +3,7 @@
 // applies from a date the user picks, so history keeps its meaning.
 
 import { app, openSheet, closeSheet, toast, go, PALETTE } from '../ctx.js';
-import { WEIGHTS, BONUS_SIZES, DEFAULT_BONUS_POINTS, DEFAULT_BONUS_CAP, applyVersion, evaluate, versionFor, isScheduled, hasTarget, totalModeAllowed, partsShareUnit } from '../engine.js';
+import { WEIGHTS, MAX_OPTION_WORTH, BONUS_SIZES, DEFAULT_BONUS_POINTS, DEFAULT_BONUS_CAP, applyVersion, evaluate, versionFor, isScheduled, hasTarget, totalModeAllowed, partsShareUnit } from '../engine.js';
 import { describe, pct, statusLabel } from '../format.js';
 import { sortedCats, catLabel, findCatByName, createCategory } from './categories.js';
 import { esc, uid, deepClone, DAY_SHORT, DAY_LONG, addDays, weekday, fmtDate } from '../util.js';
@@ -153,7 +153,7 @@ export function configFromDraft(d) {
     cfg.parts = d.parts.map((p) => ({
       partId: p.partId, ...cleanMeasure(p), weight: Number(p.weight) > 0 ? Number(p.weight) : 2,
       optional: choice ? false : !!p.optional,
-      ...(choice ? { worth: Math.max(1, Math.min(100, Math.round(Number(p.worth) || 100))) } : {}),
+      ...(choice ? { worth: Math.max(1, Math.min(MAX_OPTION_WORTH, Math.round(Number(p.worth) || 100))) } : {}),
     }));
     cfg.partMode = choice ? 'best' : d.partMode === 'total' && totalModeAllowed(cfg.parts) ? 'total' : 'each';
     cfg.partWeighting = d.partWeighting === 'equal' ? 'equal' : 'target';
@@ -209,7 +209,7 @@ function validate(d) {
     d.parts.forEach((p, i) => {
       if (!p.name.trim()) errs.push(`Option ${i + 1}: give it a name.`);
       const w = Number(p.worth);
-      if (!(w >= 1 && w <= 100)) errs.push(`${p.name || `Option ${i + 1}`}: worth must be between 1% and 100%.`);
+      if (!(w >= 1 && w <= MAX_OPTION_WORTH)) errs.push(`${p.name || `Option ${i + 1}`}: worth must be between 1% and ${MAX_OPTION_WORTH}%.`);
       errs.push(...validateMeasure(p, p.name || `Option ${i + 1}`));
     });
   } else if (d.parts.length) {
@@ -345,8 +345,9 @@ function optionCard(p, i, d) {
     <div class="field compact"><span>Worth if you choose this</span>
       <div class="inline worth-row">
         <span class="inline-num"><input type="text" inputmode="numeric" data-bind="${pre}worth" value="${val(p.worth)}" aria-label="Worth percent"><span class="unit">%</span></span>
-        ${[100, 75, 50, 25].map((n) => `<button type="button" class="chip-btn${Number(p.worth) === n ? ' on' : ''}" data-a="edSet" data-path="${pre}worth" data-v="${n}">${n}%</button>`).join('')}
-      </div></div>
+        ${[25, 50, 75, 100, 125, 150].map((n) => `<button type="button" class="chip-btn${Number(p.worth) === n ? ' on' : ''}${n > 100 ? ' extra' : ''}" data-a="edSet" data-path="${pre}worth" data-v="${n}">${n}%</button>`).join('')}
+      </div>
+      ${Number(p.worth) > 100 ? `<p class="muted small">⭐ Extra credit: choosing this earns more than a full goal, which can make up for other goals you missed that day. Your day still tops out at 100%.</p>` : ''}</div>
   </div>`;
 }
 
@@ -440,7 +441,7 @@ export function renderEditor() {
       ${isChoice ? `<div class="field"><span>How is it measured?</span>
         <select data-bind="preset" data-rr>${PRESETS.map((p) => `<option value="${p.id}"${p.id === 'choice' ? ' selected' : ''}>${p.label}</option>`).join('')}</select></div>
       <div class="field"><span>Options <em class="muted">(do any one)</em></span>
-        <p class="muted small">Each day, do whichever option you like. The goal earns the best option you did, times its worth — e.g. Workout 100%, Stretch 75%.</p>
+        <p class="muted small">Each day, do whichever option you like. The goal earns the best option you did, times its worth — e.g. Workout 100%, Stretch 75%. Set more than 100% for extra credit.</p>
         ${d.parts.map((p, i) => optionCard(p, i, d)).join('')}
         <button type="button" class="btn block" data-a="edOptAdd">+ Add option</button></div>` : hasParts ? '<div class="field"><span>How is it measured?</span><p class="muted small">By its parts (below).</p></div>' : `
       <div class="field"><span>How is it measured?</span>

@@ -299,6 +299,7 @@ details.sub > summary { padding: 8px 0; font-weight: 600; cursor: pointer; }
 .part-head { display: flex; gap: 6px; align-items: center; margin-bottom: 8px; }
 .part-head input { flex: 1; font-weight: 600; }
 .opt-num { width: 26px; height: 26px; border-radius: 50%; background: var(--accent-soft); color: var(--accent); font-weight: 700; font-size: .85rem; display: inline-flex; align-items: center; justify-content: center; flex: none; }
+.chip-btn.extra:not(.on) { border-color: var(--exceeded); color: var(--exceeded); }
 .worth-row .inline-num input { width: 4.5em; text-align: center; }
 form.inline { margin-top: 12px; flex-wrap: nowrap; }
 

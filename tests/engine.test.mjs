@@ -285,3 +285,21 @@ test('either/or goal: best option times its worth', () => {
   const a = goal('a', { kind: 'check' });
   close(dayScore(st([a, ex], { [recKey(D, 'a')]: rec(true), [recKey(D, 'ex', 's')]: rec(10) }), D, TODAY).score, 0.875);
 });
+
+test('either/or option worth over 100% is extra credit, day still capped', () => {
+  const ex = goal('ex', {
+    kind: 'number', partMode: 'best',
+    parts: [
+      { partId: 'w', kind: 'check', worth: 100 },
+      { partId: 'r', kind: 'check', worth: 150 },
+    ],
+  });
+  const a = goal('a', { kind: 'check' });
+  const r = goalDay(ex, D, { [recKey(D, 'ex', 'r')]: rec(true) }, TODAY);
+  close(r.credit, 1.5);
+  assert.equal(r.exceeded, true);
+  // goal a missed: (0 + 1.5) / 2 = 75% — the extra half makes up for part of the miss
+  close(dayScore(st([a, ex], { [recKey(D, 'ex', 'r')]: rec(true) }), D, TODAY).score, 0.75);
+  // both done: capped at 100%
+  assert.equal(dayScore(st([a, ex], { [recKey(D, 'a')]: rec(true), [recKey(D, 'ex', 'r')]: rec(true) }), D, TODAY).score, 1);
+});

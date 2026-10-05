@@ -178,8 +178,11 @@ export function totalModeAllowed(parts) {
     parts.every((p) => ['atLeast', 'none'].includes(p.target?.type || 'none'));
 }
 
-// An either/or option's worth as a fraction (stored as a percentage).
-export const optionWorth = (pc) => (Number(pc.worth) > 0 ? Math.min(100, Number(pc.worth)) / 100 : 1);
+// An either/or option's worth as a fraction (stored as a percentage). Over
+// 100% is extra credit: it can make up for other goals that day, while the
+// day itself still tops out at 100%.
+export const MAX_OPTION_WORTH = 200;
+export const optionWorth = (pc) => (Number(pc.worth) > 0 ? Math.min(MAX_OPTION_WORTH, Number(pc.worth)) / 100 : 1);
 
 export function goalDay(goal, date, records, today) {
   const v = versionFor(goal, date);
@@ -250,6 +253,7 @@ export function goalDay(goal, date, records, today) {
       }
       credit = best;
       met = counted.some((p) => p.logged && p.ev?.met);
+      exceeded = best > 1;
       base.chosen = bestPart && bestPart.logged ? bestPart.partId : null;
     } else if (v.partMode === 'total' && totalModeAllowed(partCfgs)) {
       const ev = evaluate(

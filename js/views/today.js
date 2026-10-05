@@ -75,7 +75,8 @@ function progressBar(item) {
 }
 
 function rowMeta(item, cfg) {
-  const st = cfg.partMode === 'best' && item.met && (item.credit ?? 0) < 1 ? { text: 'Done', cls: 'partial' } : statusLabel(item);
+  const st = cfg.partMode === 'best' && item.met && (item.credit ?? 0) > 1 ? { text: '⭐ Extra credit', cls: 'exceeded' }
+    : cfg.partMode === 'best' && item.met && (item.credit ?? 0) < 1 ? { text: 'Done', cls: 'partial' } : statusLabel(item);
   const parts = item.parts?.length;
   let val = '';
   if (parts && cfg.partMode === 'best') {
@@ -116,7 +117,7 @@ function goalRow(item, ro) {
       const st = p.excused ? { text: 'Excused', cls: 'excused' } :
         p.logged ? (p.ev?.hasTarget ? statusLabel({ ...p.ev, status: 'logged', hasTarget: true }) : { text: 'Logged', cls: 'logged' }) : { text: p.cfg.optional ? 'Optional' : '', cls: 'pending' };
       const ts = (p.cfg.kind === 'check' ? '' : targetShort(p.cfg, app.ui.date)) +
-        (cfg.partMode === 'best' ? `${p.cfg.kind === 'check' ? '' : ' · '}worth ${Math.round(optionWorth(p.cfg) * 100)}%` : '');
+        (cfg.partMode === 'best' ? `${p.cfg.kind === 'check' ? '' : ' · '}worth ${Math.round(optionWorth(p.cfg) * 100)}%${optionWorth(p.cfg) > 1 ? ' ⭐' : ''}` : '');
       return `<div class="part-row">
         <button class="g-main" data-a="entry" data-g="${g.id}" data-p="${p.partId}">
           <span class="g-text"><span class="g-name">${esc(meta.name)}</span>
