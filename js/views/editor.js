@@ -435,7 +435,7 @@ export function renderEditor() {
         <label class="field"><span>Notes about this goal</span><textarea data-bind="notes" rows="2">${esc(d.notes)}</textarea></label>
       </details>
 
-      <details class="more"${hasParts || d._partsOpen ? ' open' : ''} data-toggle="_partsOpen"><summary>Split into parts${hasParts ? ` (${d.parts.length})` : ''}</summary>
+      ${hasParts ? `<details class="more" open data-toggle="_partsOpen"><summary>Split into parts${hasParts ? ` (${d.parts.length})` : ''}</summary>
         <p class="muted small">Break one goal into pieces — e.g. Reading → Fiction 20 pages, History 12 pages. The goal keeps one importance in your day score; the parts decide how it's earned.</p>
         ${d.parts.map((p, i) => partCard(p, i, d)).join('')}
         <button type="button" class="btn block" data-a="edPartAdd">+ Add part</button>
@@ -453,7 +453,7 @@ export function renderEditor() {
               <option value="equal"${d.partWeighting === 'equal' ? ' selected' : ''}>No, I'll set each part's importance</option>
             </select>
             <span class="muted small">${d.partWeighting === 'equal' ? 'Set how much each part counts inside this goal.' : 'A 12-page part counts twice as much as a 6-page part.'}</span></label>` : ''}` : ''}
-      </details>
+      </details>` : ''}
     </div>
     ${d.isNew ? '' : `<div class="center"><button class="link" data-a="nav" data-href="#goal/${d.id}">View this goal's history and actions</button></div>`}`;
 }
@@ -594,9 +594,10 @@ function applyPresentation(goal, d) {
 }
 
 function finish(goal) {
+  const back = app.ui.draft?._returnTo;
   app.ui.draft = null;
   app.save();
-  go(`#goal/${goal.id}`);
+  go(back || `#goal/${goal.id}`);
 }
 
 function doSave() {
@@ -662,7 +663,7 @@ export const editorActions = {
   edCancel() {
     const d = app.ui.draft;
     app.ui.draft = null;
-    go(d && !d.isNew ? `#goal/${d.id}` : '#goals');
+    go(d?._returnTo || (d && !d.isNew ? `#goal/${d.id}` : '#goals'));
   },
   edSave() { doSave(); },
   edSet(el) {

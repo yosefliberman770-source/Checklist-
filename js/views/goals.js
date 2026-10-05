@@ -1,13 +1,13 @@
 // Goal list, categories, and a goal's own page (stats, history, lifecycle).
 
 import { app, openSheet, closeSheet, toast, go, goalColor } from '../ctx.js';
-import { inPause, periodStats, consistencyRanking, goalDay, partsShareUnit, effectiveTarget } from '../engine.js';
+import { inPause, dayScore, periodStats, consistencyRanking, goalDay, partsShareUnit, effectiveTarget } from '../engine.js';
 import { describe, fmtValue, pct, targetText, weightLabel, scheduleText, statusLabel } from '../format.js';
 import { esc, addDays, fmtDate, dateRange } from '../util.js';
 import { countRecords, deleteGoalForever } from '../store.js';
 import { valueBars } from '../charts.js';
 import { periodChips, periodRange } from './stats.js';
-import { sortedCats, catLabel } from './categories.js';
+import { sortedCats, catLabel, categoryCard, catToday } from './categories.js';
 
 export function goalBadges(g) {
   const t = app.today;
@@ -27,59 +27,64 @@ function cfgWithNames(g, v) {
   return { ...v, parts: (v.parts || []).map((p) => ({ ...p, name: (g.parts || []).find((x) => x.id === p.partId)?.name || '' })) };
 }
 
-function goalListRow(g, list, idx) {
+export function goalListRow(g, list, idx, { scope = null, item = null, showCat = false } = {}) {
   const v = g.versions[g.versions.length - 1];
-  const movable = g.state === 'active';
+  const movable = g.state === 'active' && scope != null && list.length > 1;
+  const cat = showCat && g.categoryId ? app.state.categories.find((c) => c.id === g.categoryId) : null;
+  let today = '';
+  if (item && (item.scheduled || item.status === 'logged')) {
+    const st = statusLabel(item);
+    today = item.status === 'pending' ? '<span class="chip pending">Due today</span>' : st.text ? `<span class="chip ${st.cls}">${st.text}</span>` : '';
+  }
   return `<div class="list-row" style="--gc:${goalColor(g, app.state.goals.indexOf(g))}">
     <button class="g-main" data-a="nav" data-href="#goal/${g.id}">
       ${g.icon ? `<span class="g-icon">${esc(g.icon)}</span>` : '<span class="g-icon"><span class="dot"></span></span>'}
-      <span class="g-text"><span class="g-name">${esc(g.name)}${g.pinned ? ' <span class="pin">★</span>' : ''} ${goalBadges(g)}</span>
-      <span class="g-meta">${esc(describe(cfgWithNames(g, v)))}</span></span>
+      <span class="g-text"><span class="g-name">${esc(g.name)}${g.pinned ? ' <span class="pin">★</span>' : ''} ${goalBadges(g)} ${today}</span>
+      <span class="g-meta">${cat ? `<span class="cat-tag">${catLabel(cat)}</span> ` : ''}${esc(describe(cfgWithNames(g, v)))}</span></span>
     </button>
     ${movable ? `<div class="move">
-      <button class="icon-btn" data-a="goalMove" data-g="${g.id}" data-d="-1" aria-label="Move up" ${idx === 0 ? 'disabled' : ''}>↑</button>
-      <button class="icon-btn" data-a="goalMove" data-g="${g.id}" data-d="1" aria-label="Move down" ${idx === list.length - 1 ? 'disabled' : ''}>↓</button>
+      <button class="icon-btn" data-a="goalMove" data-g="${g.id}" data-scope="${scope}" data-d="-1" aria-label="Move up" ${idx === 0 ? 'disabled' : ''}>↑</button>
+      <button class="icon-btn" data-a="goalMove" data-g="${g.id}" data-scope="${scope}" data-d="1" aria-label="Move down" ${idx === list.length - 1 ? 'disabled' : ''}>↓</button>
     </div>` : ''}
   </div>`;
 }
 
-function groupsOf(goals, { includeEmpty = false } = {}) {
-  const cats = sortedCats();
-  const sorted = [...goals].sort((a, b) => (a.order ?? 0) - (b.order ?? 0));
-  const groups = cats.map((c) => ({ id: c.id, cat: c, goals: sorted.filter((g) => g.categoryId === c.id) }));
-  groups.push({ id: '', cat: null, goals: sorted.filter((g) => !cats.some((c) => c.id === g.categoryId)) });
-  return groups.filter((g) => g.goals.length || (includeEmpty && g.cat));
-}
-
 export function renderGoals() {
   const { state } = app;
-  const active = state.goals.filter((g) => g.state === 'active');
+  const view = state.settings.goalsView || 'categories';
+  const byOrder = (a, b) => (a.order ?? 0) - (b.order ?? 0);
+  const active = state.goals.filter((g) => g.state === 'active').sort(byOrder);
   const archived = state.goals.filter((g) => g.state === 'archived');
   const trash = state.goals.filter((g) => g.state === 'trash');
-  const hasCats = state.categories.length > 0;
-  const groupHead = (gr) => {
-    if (!gr.cat) return hasCats ? '<div class="group-head-row"><h3 class="group-title">Uncategorized</h3></div>' : '';
-    return `<div class="group-head-row">
-      <h3 class="group-title">${catLabel(gr.cat)}${gr.goals.length ? ` <span class="muted">${gr.goals.length}</span>` : ''}</h3>
-      <button class="link small" data-a="catOpen" data-id="${gr.cat.id}" data-list="0">Edit</button></div>`;
-  };
-  return `<div class="topbar"><h1>Goals</h1>
-      <button class="btn small" data-a="catList">Categories</button>
-      <button class="btn primary small" data-a="nav" data-href="#new">+ Goal</button></div>
-    ${!active.length ? `<div class="empty-state"><p>No active goals yet. Your goals, your rules — create the first one.</p>
-      <button class="btn primary" data-a="nav" data-href="#new">+ Create a goal</button></div>` : ''}
-    ${active.length >= 3 && !hasCats ? `<div class="notice small">Tip: group your goals into categories, named however you like.
-      <button class="link small" data-a="catNew">+ Create a category</button></div>` : ''}
-    ${groupsOf(active, { includeEmpty: true }).map((gr) => `<section class="group">
-      ${groupHead(gr)}
-      ${gr.goals.length ? gr.goals.map((g, i) => goalListRow(g, gr.goals, i)).join('')
-        : `<div class="empty-cat muted small">No goals here yet.
-            <button class="link small" data-a="catOpen" data-id="${gr.cat.id}" data-list="0">Choose goals</button> or
-            <button class="link small" data-a="nav" data-href="#new/${gr.cat.id}">create one</button></div>`}
-    </section>`).join('')}
+  const cats = sortedCats();
+  const ds = dayScore(state, app.today, app.today);
+  let body;
+  if (view === 'categories') {
+    const uncategorized = active.filter((g) => !g.categoryId || !cats.some((c) => c.id === g.categoryId));
+    body = `<div class="cat-grid">
+        ${cats.map((c) => categoryCard(c, active.filter((g) => g.categoryId === c.id), catToday(ds, c.id))).join('')}
+        ${uncategorized.length ? categoryCard(null, uncategorized, catToday(ds, '')) : ''}
+        <button class="cat-card new" data-a="catNew"><span class="cat-card-icon">+</span><span class="cat-card-name">New category</span>
+          <span class="cat-card-meta">Group goals however you like</span></button>
+      </div>
+      ${cats.length > 1 ? '<div class="center"><button class="link small" data-a="catList">Reorder categories</button></div>' : ''}`;
+  } else {
+    body = active.length ? `<section class="group">${active.map((g, i) => goalListRow(g, active, i, { scope: 'all', showCat: true, item: ds.all.find((x) => x.goal.id === g.id) })).join('')}</section>` : '';
+  }
+  return `<div class="topbar"><h1>Goals</h1></div>
+    <div class="seg view-toggle" role="tablist">
+      <button class="${view === 'categories' ? 'on' : ''}" data-a="goalsView" data-v="categories" role="tab">Categories</button>
+      <button class="${view === 'all' ? 'on' : ''}" data-a="goalsView" data-v="all" role="tab">All goals</button>
+    </div>
+    <div class="row-btns add-row">
+      <button class="btn primary" data-a="nav" data-href="#new">+ New goal</button>
+      <button class="btn" data-a="catNew">+ New category</button>
+    </div>
+    ${!active.length && !cats.length ? `<div class="empty-state"><p>Nothing here yet. Create a goal, or start with a category (like a playlist) and add goals to it.</p></div>` : ''}
+    ${body}
     ${archived.length ? `<details class="group"><summary>Archived <span class="muted">${archived.length}</span></summary>
       <p class="muted small">No longer tracked. All their history is kept and still shows in your past scores.</p>
-      ${archived.map((g, i) => goalListRow(g, archived, i)).join('')}</details>` : ''}
+      ${archived.map((g, i) => goalListRow(g, archived, i, { showCat: true })).join('')}</details>` : ''}
     ${trash.length ? `<details class="group"><summary>Trash <span class="muted">${trash.length}</span></summary>
       <p class="muted small">Deleted for good 30 days after being moved here. While here they don't count anywhere.</p>
       ${trash.map((g, i) => goalListRow(g, trash, i)).join('')}</details>` : ''}`;
@@ -207,7 +212,7 @@ export function renderGoalDetail() {
 
   const versions = goal.versions.map((ver, i) => ({ ver, prev: goal.versions[i - 1] })).reverse();
 
-  return `<div class="topbar"><button class="link" data-a="nav" data-href="#goals">‹ Goals</button>
+  return `<div class="topbar">${cat ? `<button class="link ellipsis back-cat" data-a="nav" data-href="#cat/${cat.id}">‹ ${esc(cat.name)}</button>` : '<button class="link" data-a="nav" data-href="#goals">‹ Goals</button>'}
       <h1 class="ellipsis">${esc(goal.icon || '')} ${esc(goal.name)}</h1>
       ${isTrash ? '<span></span>' : `<button class="btn small" data-a="nav" data-href="#edit/${goal.id}">Edit</button>`}</div>
     <section class="card summary-box" style="--gc:${goalColor(goal, state.goals.indexOf(goal))}">
@@ -253,15 +258,22 @@ const findGoal = () => app.state.goals.find((g) => g.id === app.ui.param);
 export const goalActions = {
   goalMove(el) {
     const g = app.state.goals.find((x) => x.id === el.dataset.g);
-    const group = groupsOf(app.state.goals.filter((x) => x.state === 'active')).find((gr) => gr.goals.includes(g)).goals;
+    const scope = el.dataset.scope;
+    const byOrder = (x, y) => (x.order ?? 0) - (y.order ?? 0);
+    const active = app.state.goals.filter((x) => x.state === 'active').sort(byOrder);
+    const group = scope === 'all' ? active : active.filter((x) => (x.categoryId || '') === (scope === 'none' ? '' : scope));
     const i = group.indexOf(g), j = i + Number(el.dataset.d);
-    if (j < 0 || j >= group.length) return;
+    if (i < 0 || j < 0 || j >= group.length) return;
     const swapped = [...group];
     [swapped[i], swapped[j]] = [swapped[j], swapped[i]];
-    const all = [...app.state.goals].sort((x, y) => (x.order ?? 0) - (y.order ?? 0));
+    const all = [...app.state.goals].sort(byOrder);
     const slots = all.map((x, k) => (group.includes(x) ? k : -1)).filter((k) => k >= 0);
     slots.forEach((k, n) => { all[k] = swapped[n]; });
     all.forEach((x, k) => { x.order = k; });
+    app.commit();
+  },
+  goalsView(el) {
+    app.state.settings.goalsView = el.dataset.v;
     app.commit();
   },
   goalPause() {

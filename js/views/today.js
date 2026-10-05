@@ -142,7 +142,10 @@ function groupCount(items) {
   const bonusDone = items.filter((i) => i.bonus && i.status === 'logged' && (i.credit || 0) > 0).length;
   const extra = bonusDone ? ` · ⭐ ${bonusDone}` : '';
   if (!counted.length) return bonusDone ? `⭐ ${bonusDone} bonus` : `${items.length}`;
-  return `${counted.filter((i) => i.met).length} of ${counted.length} met${extra}`;
+  const scored = counted.filter((i) => i.scored);
+  const W = scored.reduce((a, i) => a + i.weight, 0);
+  const p = W ? ` · ${Math.round((100 * scored.reduce((a, i) => a + i.weight * Math.min(1, i.credit || 0), 0)) / W)}%` : '';
+  return `${counted.filter((i) => i.met).length} of ${counted.length} met${p}${extra}`;
 }
 
 function groupItems(items) {

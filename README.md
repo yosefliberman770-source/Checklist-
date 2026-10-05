@@ -44,8 +44,9 @@ you pick. It works even when the app is closed; delete the event to stop it.
   your own unit), or *time*. Targets can be *at least*, *no more than*, *between*, *exactly*, or none.
 - **Log what really happened.** Tap **✓ Done** to fill in the target, then adjust with − / + or tap the
   value to type the exact amount — under or over the target.
-- **Parts.** Split a goal (e.g. Reading → Fiction 20, Nonfiction 10, History 12, Romance 6 pages).
-  Choose whether *each part counts* (extra fiction doesn't cover missed history) or *only the total counts*.
+- **Categories like playlists.** The Goals tab shows your categories as cards (e.g. 📚 Reading) or all
+  goals in one list. Open a category to see its goals (Fiction, Nonfiction, History…), add a new goal
+  there, or move existing goals in. Categories organize; they never change your score.
 - **Importance** (Low · Normal · High · Top, each twice the one before) is the only thing that sets how
   much a goal affects your score.
 - **Day score** = weighted average of each scheduled goal's credit (0–100%). Unscheduled goals never

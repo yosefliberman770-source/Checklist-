@@ -1,8 +1,9 @@
 // Categories: optional groups the user creates to organize goals.
 // They only organize — they never change scores.
 
-import { app, openSheet, closeSheet, toast } from '../ctx.js';
-import { esc, uid } from '../util.js';
+import { app, openSheet, closeSheet, toast, PALETTE } from '../ctx.js';
+import { dayScore, periodStats } from '../engine.js';
+import { esc, uid, addDays, mean } from '../util.js';
 
 export const sortedCats = () => [...app.state.categories].sort((a, b) => (a.order ?? 0) - (b.order ?? 0));
 
@@ -95,9 +96,9 @@ export const categoryActions = {
     if (!confirm(`Delete the category "${c.name}"?${n ? `\n\nIts ${n} goal${n === 1 ? '' : 's'} will move to Uncategorized. Goals and their history are not affected.` : ''}`)) return;
     app.state.categories = app.state.categories.filter((x) => x.id !== c.id);
     for (const g of app.state.goals) if (g.categoryId === c.id) g.categoryId = null;
-    app.commit();
+    app.save();
     toast('Category deleted');
-    openCategoryList();
+    if (app.ui.route === 'cat') { closeSheet(); location.hash = '#goals'; } else { app.render(); openCategoryList(); }
   },
 };
 
@@ -117,8 +118,115 @@ export const categorySubmit = {
       if (ticked.has(g.id)) g.categoryId = c.id;
       else if (g.categoryId === c.id) g.categoryId = null;
     }
-    app.commit();
-    toast(id ? 'Category saved' : `Category "${name}" created`);
     closeSheet();
+    toast(id ? 'Category saved' : `Category "${name}" created`);
+    if (!id) location.hash = `#cat/${c.id}`;
+    else app.commit();
+    app.save();
   },
+};
+
+// ---------- category progress ----------
+
+// A category's progress on one day: the importance-weighted credit of its
+// regular scored goals (bonus goals left out), or null if none were due.
+export function catDayScore(ds, catId) {
+  let share = 0, contrib = 0;
+  for (const b of ds.breakdown) {
+    if (b.bonus || (b.item.goal.categoryId || '') !== (catId || '')) continue;
+    share += b.share;
+    contrib += (b.share * Math.min(1, b.credit));
+  }
+  return share > 0 ? contrib / share : null;
+}
+
+export function catToday(ds, catId) {
+  const items = ds.items.filter((i) => i.scored && !i.bonus && i.status !== 'excused' && (i.goal.categoryId || '') === (catId || ''));
+  return { score: catDayScore(ds, catId), due: items.length, met: items.filter((i) => i.met).length };
+}
+
+export const catColor = (c) => c?.color || PALETTE[(sortedCats().indexOf(c) + 2) % PALETTE.length];
+
+// ---------- the "playlist" grid and a category's own page ----------
+
+export function categoryCard(c, goals, today) {
+  const id = c?.id || 'none';
+  const name = c ? esc(c.name) : 'Uncategorized';
+  const icon = c?.icon ? esc(c.icon) : c ? esc(c.name.trim().charAt(0).toUpperCase() || '•') : '•';
+  const pctTxt = today.score == null ? null : Math.round(today.score * 100);
+  return `<a class="cat-card" href="#cat/${id}" style="--cc:${c ? catColor(c) : 'var(--excused)'}">
+    <span class="cat-card-icon">${icon}</span>
+    <span class="cat-card-name">${name}</span>
+    <span class="cat-card-meta">${goals.length} goal${goals.length === 1 ? '' : 's'}</span>
+    <span class="cat-card-bar"><span style="width:${pctTxt ?? 0}%"></span></span>
+    <span class="cat-card-today">${today.due ? `Today ${pctTxt}% · ${today.met}/${today.due} met` : 'Nothing due today'}</span>
+  </a>`;
+}
+
+export function renderCategoryPage({ goalListRow }) {
+  const id = app.ui.param;
+  const isNone = id === 'none';
+  const c = isNone ? null : app.state.categories.find((x) => x.id === id);
+  if (!isNone && !c) return `<div class="topbar"><button class="link" data-a="nav" data-href="#goals">‹ Goals</button></div><p class="muted center">This category no longer exists.</p>`;
+  const catId = isNone ? '' : c.id;
+  const byOrder = (a, b) => (a.order ?? 0) - (b.order ?? 0);
+  const goals = app.state.goals.filter((g) => g.state === 'active' && (g.categoryId || '') === catId).sort(byOrder);
+  const archived = app.state.goals.filter((g) => g.state === 'archived' && (g.categoryId || '') === catId);
+  const ds = dayScore(app.state, app.today, app.today);
+  const t = catToday(ds, catId);
+  const end = app.state.settings.includeToday ? app.today : addDays(app.today, -1);
+  const ps = periodStats(app.state, addDays(end, -29), end, app.today);
+  const avg = mean(ps.days.map((d) => catDayScore(d, catId)).filter((x) => x != null));
+  const others = app.state.goals.filter((g) => g.state !== 'trash' && (g.categoryId || '') !== catId);
+  const itemFor = (g) => ds.all.find((i) => i.goal.id === g.id);
+  return `<div class="topbar"><button class="link" data-a="nav" data-href="#goals">‹ Goals</button>
+      <span></span>
+      ${c ? `<button class="btn small" data-a="catOpen" data-id="${c.id}" data-list="0">Edit</button>` : '<span></span>'}</div>
+    <section class="cat-hero" style="--cc:${c ? catColor(c) : 'var(--excused)'}">
+      <span class="cat-hero-icon">${c?.icon ? esc(c.icon) : c ? esc(c.name.trim().charAt(0).toUpperCase()) : '•'}</span>
+      <div><h1>${c ? esc(c.name) : 'Uncategorized'}</h1>
+        <div class="muted small">${goals.length} goal${goals.length === 1 ? '' : 's'}</div></div>
+    </section>
+    <div class="tiles">
+      <div class="tile"><div class="tile-num">${t.score == null ? '—' : `${Math.round(t.score * 100)}%`}</div>
+        <div class="tile-label">${t.due ? `Today · ${t.met} of ${t.due} met` : 'Nothing due today'}</div></div>
+      <div class="tile"><div class="tile-num">${avg == null ? '—' : `${Math.round(avg * 100)}%`}</div><div class="tile-label">Last 30 days</div></div>
+    </div>
+    <div class="row-btns cat-actions">
+      <button class="btn primary" data-a="nav" data-href="#new/${isNone ? 'none' : c.id}">+ New goal here</button>
+      ${c && others.length ? `<button class="btn" data-a="catAddExisting" data-id="${c.id}">Add existing goals</button>` : ''}
+    </div>
+    <section class="group">
+      ${goals.length ? goals.map((g, i) => goalListRow(g, goals, i, { scope: catId || 'none', item: itemFor(g) })).join('')
+        : `<div class="empty-cat muted">No goals in ${c ? esc(c.name) : 'here'} yet. Tap <b>+ New goal here</b>${c && others.length ? ' or <b>Add existing goals</b>' : ''}.</div>`}
+    </section>
+    ${archived.length ? `<details class="group"><summary>Archived <span class="muted">${archived.length}</span></summary>
+      ${archived.map((g, i) => goalListRow(g, archived, i)).join('')}</details>` : ''}
+    <p class="muted small center">Categories only organize your goals — they never change your score.</p>`;
+}
+
+function openAddExisting(catId) {
+  const c = app.state.categories.find((x) => x.id === catId);
+  const catsById = Object.fromEntries(app.state.categories.map((x) => [x.id, x]));
+  const goals = app.state.goals.filter((g) => g.state !== 'trash' && g.categoryId !== catId).sort((a, b) => (a.order ?? 0) - (b.order ?? 0));
+  openSheet(`
+    <div class="sheet-head"><h2>Add to ${catLabel(c)}</h2><button class="x" data-a="closeSheet" aria-label="Close">✕</button></div>
+    <p class="muted small">Pick goals you already have. They'll move into ${esc(c.name)}.</p>
+    <form data-submit="catAddGoals" data-id="${c.id}">
+      <div class="cat-goals">${goals.map((g) => `<label class="cat-goal"><input type="checkbox" name="goal" value="${g.id}">
+        <span class="cat-goal-name">${esc(g.icon || '')} ${esc(g.name)}${g.state === 'archived' ? ' <span class="muted small">(archived)</span>' : ''}</span>
+        ${g.categoryId && catsById[g.categoryId] ? `<span class="muted small">in ${catLabel(catsById[g.categoryId])}</span>` : ''}</label>`).join('')}</div>
+      <button class="btn primary block" type="submit">Add selected</button>
+    </form>`);
+}
+
+categoryActions.catAddExisting = (el) => openAddExisting(el.dataset.id);
+categorySubmit.catAddGoals = (form) => {
+  const ids = new Set([...form.querySelectorAll('input[name="goal"]:checked')].map((x) => x.value));
+  if (!ids.size) { closeSheet(); return; }
+  const c = app.state.categories.find((x) => x.id === form.dataset.id);
+  for (const g of app.state.goals) if (ids.has(g.id)) g.categoryId = c.id;
+  closeSheet();
+  app.commit();
+  toast(`Added ${ids.size} goal${ids.size === 1 ? '' : 's'} to ${c.name}`);
 };

@@ -322,6 +322,36 @@ form.inline { margin-top: 12px; flex-wrap: nowrap; }
 .cat-goal input { width: 22px; height: 22px; flex: none; }
 .cat-goal-name { flex: 1; overflow-wrap: anywhere; }
 
+/* ---------- goals tab: playlist-style categories ---------- */
+.view-toggle { margin: 4px 0 10px; }
+.add-row { margin: 0 0 14px; }
+.cat-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px; margin-bottom: 10px; }
+@media (min-width: 560px) { .cat-grid { grid-template-columns: repeat(3, minmax(0, 1fr)); } }
+.cat-card {
+  display: flex; flex-direction: column; align-items: flex-start; gap: 4px; text-align: left;
+  padding: 14px; border-radius: var(--radius); text-decoration: none; color: var(--text);
+  background: linear-gradient(160deg, color-mix(in srgb, var(--cc) 22%, var(--surface)), var(--surface) 70%);
+  border: 1px solid color-mix(in srgb, var(--cc) 35%, var(--line)); box-shadow: var(--shadow); min-height: 150px;
+}
+.cat-card.new { background: transparent; border: 1.5px dashed var(--line); box-shadow: none; color: var(--accent); --cc: var(--accent); }
+.cat-card-icon {
+  width: 44px; height: 44px; border-radius: 12px; display: flex; align-items: center; justify-content: center;
+  font-size: 1.4rem; font-weight: 700; color: #fff; background: var(--cc); margin-bottom: 4px;
+}
+.cat-card.new .cat-card-icon { background: var(--accent-soft); color: var(--accent); }
+.cat-card-name { font-weight: 700; font-size: 1.05rem; overflow-wrap: anywhere; }
+.cat-card-meta { color: var(--muted); font-size: .82rem; }
+.cat-card-bar { width: 100%; height: 6px; border-radius: 3px; background: var(--surface-2); margin-top: auto; overflow: hidden; }
+.cat-card-bar > span { display: block; height: 100%; background: var(--cc); }
+.cat-card-today { font-size: .78rem; color: var(--muted); }
+.cat-hero { display: flex; align-items: center; gap: 14px; padding: 16px; border-radius: var(--radius);
+  background: linear-gradient(160deg, color-mix(in srgb, var(--cc) 25%, var(--surface)), var(--surface)); border: 1px solid var(--line); }
+.cat-hero-icon { width: 60px; height: 60px; border-radius: 16px; background: var(--cc); color: #fff; font-size: 1.9rem; font-weight: 700;
+  display: flex; align-items: center; justify-content: center; flex: none; }
+.cat-tag { display: inline-block; background: var(--surface-2); border-radius: 999px; padding: 0 8px; margin-right: 4px; font-size: .78rem; color: var(--text); }
+.back-cat { max-width: 40%; }
+.cat-actions { margin: 12px 0 14px; }
+
 /* ---------- goals list ---------- */
 .list-row { padding: 6px 8px; }
 .move { display: flex; gap: 4px; }
