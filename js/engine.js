@@ -31,7 +31,32 @@ export const DIFFICULTIES = [
   { label: 'Very hard', value: 2 },
 ];
 export const difficultyOf = (v) => (Number(v.difficulty) > 0 ? Number(v.difficulty) : 1);
-export const goalPoints = (v) => (Number(v.weight) || 0) * difficultyOf(v);
+
+// Points: every goal is worth its own points, plus extra points for being
+// hard. In "points" scoring the day is the points earned toward a daily
+// target (default 100) — skipped tasks simply add nothing. In "percent"
+// scoring the same points act as relative weights of what was due.
+// Goals saved before points existed derive them: importance level × 5
+// (Low 5 · Normal 10 · High 20 · Top 40) and the old difficulty multiplier.
+export const POINT_LEVELS = [
+  { label: 'Low', value: 5 },
+  { label: 'Normal', value: 10 },
+  { label: 'High', value: 20 },
+  { label: 'Top', value: 40 },
+];
+export const EXTRA_LEVELS = [
+  { label: 'Normal', value: 0 },
+  { label: 'Hard', value: 5 },
+  { label: 'Very hard', value: 10 },
+];
+export const DEFAULT_DAILY_TARGET = 100;
+export const basePoints = (v) => (Number(v.points) > 0 ? Number(v.points) : (Number(v.weight) > 0 ? Number(v.weight) : 2) * 5);
+export const extraPoints = (v) => (v.extraPoints !== undefined && v.extraPoints !== '' && v.extraPoints !== null
+  ? Math.max(0, Number(v.extraPoints) || 0)
+  : (difficultyOf(v) - 1) * basePoints(v));
+export const goalPoints = (v) => Math.max(0, basePoints(v) + extraPoints(v));
+export const scoringMode = (settings) => (settings?.scoring === 'points' ? 'points' : 'percent');
+export const dailyTarget = (settings) => (Number(settings?.dailyTarget) > 0 ? Number(settings.dailyTarget) : DEFAULT_DAILY_TARGET);
 
 export const recKey = (date, goalId, partId = '') => `${date}|${goalId}|${partId || ''}`;
 
@@ -357,14 +382,25 @@ export function dayScore(state, date, today) {
   res.bonusPoints = Math.min(bonusRaw, bonusCap);
   res.bonusDone = bonus.filter((i) => (i.credit || 0) > 0).length +
     optionBonusItems.reduce((a, i) => a + i.optionBonuses.length, 0);
-  res.score = Math.min(1, earned / W + res.bonusPoints / 100);
+  const pointsMode = scoringMode(state.settings) === 'points';
+  res.mode = pointsMode ? 'points' : 'percent';
+  res.target = dailyTarget(state.settings);
+  res.possible = W;
+  if (pointsMode) {
+    // Points earned toward the daily target; what you skip just adds nothing.
+    res.points = earned + res.bonusPoints;
+    res.score = Math.min(1, res.points / res.target);
+  } else {
+    res.score = Math.min(1, earned / W + res.bonusPoints / 100);
+  }
   res.metCount = counted.filter((i) => i.met).length;
   res.pendingCount = counted.filter((i) => i.status === 'pending').length;
+  const scale = pointsMode ? 1 : 100 / W;
   res.breakdown = counted.map((i) => ({
     goalId: i.goal.id, item: i, weight: i.weight, credit: i.credit || 0,
-    share: (100 * i.weight) / W,
-    contribution: (100 * i.weight * (i.credit || 0)) / W,
-    lost: (100 * i.weight * (1 - Math.min(1, i.credit || 0))) / W,
+    share: i.weight * scale,
+    contribution: i.weight * (i.credit || 0) * scale,
+    lost: i.weight * (1 - Math.min(1, i.credit || 0)) * scale,
   }));
   for (const i of optionBonusItems) {
     for (const b of i.optionBonuses) {

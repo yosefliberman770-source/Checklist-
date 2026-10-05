@@ -334,10 +334,46 @@ test('difficulty multiplies a goal\'s points: low priority but hard can outweigh
   const easy = goal('e', { kind: 'check', weight: 4 });                 // High, normal difficulty = 4
   const hard = goal('h', { kind: 'check', weight: 1, difficulty: 2 });  // Low, very hard = 2
   const big = goal('b', { kind: 'check', weight: 1, difficulty: 2 });
-  assert.equal(goalDay(hard, D, {}, TODAY).weight, 2);
+  assert.equal(goalDay(hard, D, {}, TODAY).weight, 10); // Low (5) very hard → 5 + 5 extra
   // only the hard one done: 2 / (4 + 2)
   close(dayScore(st([easy, hard], { [recKey(D, 'h')]: rec(true) }), D, TODAY).score, 2 / 6);
   // a Low+Very hard goal is worth twice a Low+Normal goal
   const low = goal('l', { kind: 'check', weight: 1 });
   close(dayScore(st([low, big], { [recKey(D, 'b')]: rec(true) }), D, TODAY).score, 2 / 3);
+});
+
+test('points mode: points earned toward a daily target, skipped tasks cost nothing', () => {
+  const settings = { scoring: 'points', dailyTarget: 100 };
+  const tasks = [];
+  for (let k = 0; k < 20; k++) tasks.push(goal('t' + k, { kind: 'check', points: 10 }));
+  const hard = goal('h', { kind: 'check', points: 10, extraPoints: 5 });
+  const recs = {};
+  for (let k = 0; k < 7; k++) recs[recKey(D, 't' + k)] = rec(true);
+  // 7 of 20 tasks done = 70 points, even though 210 were possible
+  const d1 = dayScore(st([...tasks, hard], recs, settings), D, TODAY);
+  close(d1.points, 70);
+  close(d1.score, 0.7);
+  close(d1.possible, 215);
+  // the hard task gives its 10 + 5 extra
+  recs[recKey(D, 'h')] = rec(true);
+  close(dayScore(st([...tasks, hard], recs, settings), D, TODAY).points, 85);
+  // going past the target is kept as points but the day score caps at 100%
+  for (let k = 7; k < 12; k++) recs[recKey(D, 't' + k)] = rec(true);
+  const d3 = dayScore(st([...tasks, hard], recs, settings), D, TODAY);
+  close(d3.points, 135);
+  assert.equal(d3.score, 1);
+  // partial progress earns part of the points; bonus points add on top
+  const pages = goal('p', { kind: 'number', points: 20, target: { type: 'atLeast', value: 20 } });
+  const b = goal('b', { kind: 'check', bonus: true, bonusPoints: 3 });
+  const d4 = dayScore(st([pages, b], { [recKey(D, 'p')]: rec(10), [recKey(D, 'b')]: rec(true) }, settings), D, TODAY);
+  close(d4.points, 13);
+  // custom target
+  close(dayScore(st([pages], { [recKey(D, 'p')]: rec(20) }, { scoring: 'points', dailyTarget: 40 }), D, TODAY).score, 0.5);
+});
+
+test('old goals keep the same percent scores under the points model', () => {
+  const hi = goal('hi', { kind: 'check', weight: 4 });
+  const lo = goal('lo', { kind: 'check', weight: 1, difficulty: 1.5 });
+  // weights 4 vs 1.5 → points 20 vs 7.5: same ratio
+  close(dayScore(st([hi, lo], { [recKey(D, 'hi')]: rec(true) }), D, TODAY).score, 4 / 5.5);
 });

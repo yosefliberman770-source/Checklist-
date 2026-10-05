@@ -97,7 +97,17 @@ function rowMeta(item, cfg) {
     cfg.target?.type === 'atLeast' ? ` · ${pct(item.progress)}` : '';
   const partsPct = (parts && item.status === 'logged' && item.credit != null ? ` · ${pct(item.credit)}` : '') +
     (cfg.partMode === 'best' && item.met && ob > 0 ? ` · ⭐ +${Math.round(ob)}` : '');
-  return `<span class="g-meta">${esc(val)}${progress}${partsPct}${st.text ? ` <span class="chip ${st.cls}">${st.text}</span>` : ''}${item.note ? ' <span class="noteflag" title="Has a note">✎</span>' : ''}</span>`;
+  const pointsMode = app.state.settings.scoring === 'points';
+  const hideMiss = pointsMode && (item.status === 'missed' || (st.cls === 'missed' && st.text === 'No progress'));
+  let ptsChip = '';
+  if (pointsMode && item.scored && item.status !== 'excused' && item.status !== 'unscheduled') {
+    const earned = item.bonus ? item.bonusValue * Math.min(1, item.credit || 0) : item.weight * (item.credit || 0);
+    const worth = item.bonus ? item.bonusValue : item.weight;
+    ptsChip = earned > 0.05
+      ? ` <span class="pts-chip earned">+${fmtNum(Math.round(earned * 10) / 10, 1)}</span>`
+      : ` <span class="pts-chip">${fmtNum(Math.round(worth * 10) / 10, 1)} pts</span>`;
+  }
+  return `<span class="g-meta">${esc(val)}${progress}${partsPct}${st.text && !hideMiss ? ` <span class="chip ${st.cls}">${st.text}</span>` : ''}${ptsChip}${item.note ? ' <span class="noteflag" title="Has a note">✎</span>' : ''}</span>`;
 }
 
 function goalRow(item, ro) {
@@ -191,7 +201,14 @@ export function renderToday() {
   if (ds.skipped) { scoreMain = '—'; scoreSub = 'Day skipped'; }
   else if (ds.untracked) { scoreMain = '—'; scoreSub = 'Not tracked (nothing logged)'; }
   else if (ds.score == null) { scoreMain = '—'; scoreSub = ds.items.length ? 'No scored goals today' : 'Nothing scheduled today'; }
-  else {
+  else if (ds.mode === 'points') {
+    const pts = Math.round(ds.points);
+    scoreMain = `${pts}<span class="of-target"> / ${ds.target}</span>`;
+    scoreSub = pts >= ds.target
+      ? `🎉 Goal reached${pts > ds.target ? ` · +${pts - ds.target} extra` : ''}`
+      : `${ds.target - pts} points to go`;
+    if (ds.bonusDone) scoreSub += ` · ⭐ +${Math.round(ds.bonusPoints)} bonus`;
+  } else {
     scoreMain = pct(ds.score);
     scoreSub = ds.provisional && ds.pendingCount
       ? `so far · ${ds.pendingCount} left`
@@ -535,6 +552,7 @@ export const todayActions = {
     if (ds.score == null) return;
     const regular = ds.breakdown.filter((b) => !b.bonus).sort((a, b) => b.lost - a.lost || b.share - a.share);
     const bonus = ds.breakdown.filter((b) => b.bonus);
+    if (ds.mode === 'points') return pointsBreakdown(ds, regular, bonus);
     const base = (100 * ds.earned) / ds.weightSum;
     const lostSum = regular.reduce((a, b) => a + b.lost, 0);
     const name = (b) => `${esc(b.item.goal.icon || '')} ${esc(b.item.goal.name)}${b.optionBonus ? ` · ${esc(partMeta(b.item.goal, b.partId).name)}` : ''}`;
@@ -563,6 +581,27 @@ export const todayActions = {
       ${ds.extra.length ? `<p class="muted small">Extra (not scheduled, not scored): ${ds.extra.map((i) => esc(i.goal.name)).join(', ')}</p>` : ''}`);
   },
 };
+
+function pointsBreakdown(ds, regular, bonus) {
+  const name = (b) => `${esc(b.item.goal.icon || '')} ${esc(b.item.goal.name)}${b.optionBonus ? ` · ${esc(partMeta(b.item.goal, b.partId).name)}` : ''}`;
+  const done = regular.filter((b) => b.contribution > 0.05).sort((a, b) => b.contribution - a.contribution);
+  const notDone = regular.filter((b) => b.contribution <= 0.05).sort((a, b) => b.share - a.share);
+  const fmt = (x) => fmtNum(Math.round(x * 10) / 10, 1);
+  const pts = Math.round(ds.points);
+  openSheet(`
+    <div class="sheet-head"><h2>${pts} / ${ds.target} points · ${esc(dayTitle(app.ui.date))}</h2><button class="x" data-a="closeSheet" aria-label="Close">✕</button></div>
+    <p class="muted small">Every task you do adds its points (more for hard ones). Skipping a task never takes points away — the aim is ${ds.target} a day.</p>
+    ${done.length ? `<table class="tbl">
+      <thead><tr><th>Done</th><th class="num">Points</th></tr></thead>
+      <tbody>${done.map((b) => `<tr><td>${name(b)}${b.credit < 0.999 ? ` <span class="muted small">(${pct(b.credit)} of ${fmt(b.share)})</span>` : ''}</td><td class="num">+${fmt(b.contribution)}</td></tr>`).join('')}
+        ${bonus.map((b) => `<tr><td>⭐ ${name(b)}</td><td class="num bonus-pts">+${fmt(b.contribution)}</td></tr>`).join('')}</tbody>
+      <tfoot><tr><td>Total</td><td class="num">${fmt(ds.points)}</td></tr></tfoot>
+    </table>` : '<p class="muted">Nothing done yet.</p>'}
+    ${ds.bonusRaw > ds.bonusPoints + 0.05 ? `<p class="muted small">Bonuses are limited to +${ds.bonusCap} a day, so +${fmt(ds.bonusPoints)} counted.</p>` : ''}
+    ${notDone.length ? `<h3 class="sub-h">Still available</h3><table class="tbl">
+      <tbody>${notDone.map((b) => `<tr><td class="muted">${name(b)}</td><td class="num muted">${fmt(b.share)}</td></tr>`).join('')}</tbody></table>` : ''}
+    <p class="muted small">${fmt(ds.possible)} points were possible today.</p>`);
+}
 
 export const todayChange = {
   pickDate(el) {

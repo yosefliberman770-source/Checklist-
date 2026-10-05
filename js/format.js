@@ -1,6 +1,6 @@
 // Turning numbers and configuration into words the user reads.
 
-import { effectiveTarget, WEIGHTS, DIFFICULTIES } from './engine.js';
+import { effectiveTarget, WEIGHTS, DIFFICULTIES, basePoints, extraPoints } from './engine.js';
 import { DAY_SHORT, fmtDate } from './util.js';
 
 export function fmtDur(min) {
@@ -121,8 +121,8 @@ export function describe(cfg, { includeWeight = true } = {}) {
   if (!cfg.scored || !scoredPossible) bits.push('not in score');
   else if (cfg.bonus) bits.push(`⭐ bonus +${Number(cfg.bonusPoints) > 0 ? cfg.bonusPoints : 2}`);
   else if (includeWeight) {
-    const dif = Number(cfg.difficulty) > 0 ? Number(cfg.difficulty) : 1;
-    bits.push(`importance: ${weightLabel(cfg.weight)}${dif !== 1 ? ` · ${difficultyLabel(dif).toLowerCase()} (×${dif === 0.5 ? '½' : dif})` : ''}`);
+    const base = basePoints(cfg), extra = Math.round(extraPoints(cfg) * 10) / 10;
+    bits.push(extra > 0 ? `${fmtNum(base + extra, 1)} points (${fmtNum(base, 1)} + ${fmtNum(extra, 1)} for hard)` : `${fmtNum(base, 1)} points`);
   }
   return bits.join(' · ');
 }
@@ -146,4 +146,15 @@ export function statusLabel(i) {
   if (c < 0.5) return { text: 'Started', cls: 'partial' };
   if (c < 0.9) return { text: 'Partial', cls: 'partial' };
   return { text: 'Nearly there', cls: 'partial' };
+}
+
+// A day score (0..1 of the day, or of the daily points target) in the user's
+// chosen scoring style: "78%" or "78 pts".
+export function scoreLabel(score01, settings) {
+  if (score01 == null) return '—';
+  if (settings?.scoring === 'points') {
+    const target = Number(settings.dailyTarget) > 0 ? Number(settings.dailyTarget) : 100;
+    return `${Math.round(score01 * target)} pts`;
+  }
+  return `${Math.round(score01 * 100)}%`;
 }

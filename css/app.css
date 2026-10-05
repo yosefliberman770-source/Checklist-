@@ -135,6 +135,10 @@ body[data-route="edit"] .tabbar, body[data-route="new"] .tabbar { display: none;
 .ring-fg { fill: none; stroke: var(--accent); stroke-width: 9; stroke-linecap: round; transition: stroke-dasharray .35s; }
 .score-big { font-size: 2.1rem; font-weight: 750; letter-spacing: -.02em; line-height: 1.05; }
 .score-sub { color: var(--muted); }
+.of-target { font-size: 1.1rem; font-weight: 600; color: var(--muted); letter-spacing: 0; }
+.sub-h { margin: 14px 0 4px; font-size: .9rem; color: var(--muted); }
+.small-row { margin-top: 6px; }
+.small-row .inline-num input { width: 5.5em; }
 .score-hint { color: var(--accent); font-size: .78rem; margin-top: 2px; }
 
 .group { margin-bottom: 12px; }
@@ -163,6 +167,8 @@ body[data-route="edit"] .tabbar, body[data-route="new"] .tabbar { display: none;
 .g-icon .dot { display: inline-block; width: 12px; height: 12px; border-radius: 50%; background: var(--gc, var(--accent)); vertical-align: middle; }
 .pin { color: var(--partial); font-size: .8rem; }
 .noteflag { color: var(--accent); }
+.pts-chip { display: inline-block; padding: 0 7px; border-radius: 999px; font-size: .74rem; font-weight: 650; border: 1px solid var(--line); color: var(--muted); white-space: nowrap; }
+.pts-chip.earned { background: var(--accent); border-color: var(--accent); color: var(--accent-ink); }
 .pbar { height: 4px; background: var(--surface-2); }
 .pbar > div { height: 100%; background: var(--gc, var(--accent)); transition: width .3s; }
 

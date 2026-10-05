@@ -5,7 +5,7 @@ import { toCSV, validateImport, defaultState, saveState } from '../store.js';
 import { ENGINE_VERSION } from '../engine.js';
 import { esc, fmtDate, todayStr } from '../util.js';
 
-export const APP_VERSION = '1.11';
+export const APP_VERSION = '2.0';
 
 const isStandalone = () => matchMedia('(display-mode: standalone)').matches || navigator.standalone === true;
 
@@ -44,8 +44,15 @@ export function renderSettings() {
       <p class="muted small">It then opens full-screen like a normal app and works offline.</p></section>`}
     <section class="card form">
       <h3>Scoring</h3>
+      <label class="field"><span>How your day is scored</span>
+        <select data-setting="scoring">${opt('points', s.scoring, 'Points toward a daily goal')}${opt('percent', s.scoring, 'Percent of what was due')}</select>
+        <span class="muted small">${s.scoring === 'points'
+          ? 'Each task adds its points; skipped tasks cost nothing. Great when you have lots of tasks and won\'t do them all.'
+          : 'Your score is the share of the day\'s scheduled goals you completed.'}</span></label>
+      ${s.scoring === 'points' ? `<label class="field"><span>Daily points goal</span>
+        <span class="inline-num"><input type="number" min="1" data-setting="dailyTarget" data-type="num" value="${esc(s.dailyTarget ?? 100)}"><span class="unit">points</span></span></label>` : ''}
       <label class="field"><span>A "good day" is a score of at least</span>
-        <span class="inline-num"><input type="number" min="1" max="100" data-setting="goodDay" data-type="num" value="${esc(s.goodDay)}"><span class="unit">%</span></span></label>
+        <span class="inline-num"><input type="number" min="1" max="100" data-setting="goodDay" data-type="num" value="${esc(s.goodDay)}"><span class="unit">${s.scoring === 'points' ? '% of the daily goal' : '%'}</span></span></label>
       <label class="field"><span>Past days where nothing at all was logged count as</span>
         <select data-setting="unloggedDays">${opt('missed', s.unloggedDays, 'Missed — scheduled goals score 0 (default)')}${opt('untracked', s.unloggedDays, 'Not tracked — left out of averages')}</select></label>
       <label class="field"><span>Most bonus points in one day</span>
@@ -151,6 +158,10 @@ export function applySetting(el) {
   let v = el.type === 'checkbox' ? el.checked : el.value;
   if (el.dataset.type === 'num') v = Number(v);
   if (key === 'goodDay') v = Math.max(1, Math.min(100, Number(v) || 80));
+  if (key === 'dailyTarget') v = Math.max(1, Math.round(Number(v) || 100));
+  if (key === 'scoring' && !confirm(v === 'points'
+    ? 'Switch to points? Every day, including past days, will be shown as points toward your daily goal.'
+    : 'Switch to percent? Every day, including past days, will be shown as the share of what was due.')) { el.value = app.state.settings.scoring; return; }
   app.state.settings[key] = v;
   applyTheme();
   app.commit();

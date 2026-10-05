@@ -3,7 +3,7 @@
 import { app } from '../ctx.js';
 import { dayScore, rolling, periodStats } from '../engine.js';
 import { scoreLine } from '../charts.js';
-import { pct100 } from '../format.js';
+import { scoreLabel } from '../format.js';
 import { addDays, endOfMonth, weekday, DAY_SHORT, MONTHS_LONG, fmtDate, mean } from '../util.js';
 
 function monthShift(ym, n) {
@@ -16,6 +16,7 @@ function monthShift(ym, n) {
 
 export function renderHistory() {
   const { state, today, ui } = app;
+  const scoresLabel = (avg100) => (avg100 == null ? '—' : scoreLabel(avg100 / 100, state.settings));
   const ym = ui.histMonth;
   const first = `${ym}-01`;
   const last = endOfMonth(first);
@@ -38,7 +39,7 @@ export function renderHistory() {
     if (state.days[d]?.note) cls.push('noted');
     cells.push(`<button class="${cls.join(' ')}" ${style ? `style="${style}"` : ''} data-a="nav" data-href="#today/${d}" ${d > today ? 'disabled' : ''}
       aria-label="${fmtDate(d)}: ${s == null ? 'no score' : Math.round(s * 100) + '%'}">
-      <span class="cal-d">${Number(d.slice(8))}</span>${s != null ? `<span class="cal-s">${Math.round(s * 100)}</span>` : ''}</button>`);
+      <span class="cal-d">${Number(d.slice(8))}</span>${s != null ? `<span class="cal-s">${ds.mode === 'points' ? Math.round(ds.points) : Math.round(s * 100)}</span>` : ''}</button>`);
   }
   const thr = Number(state.settings.goodDay) || 80;
   const wdOrder = [...Array(7)].map((_, i) => (i + ws) % 7);
@@ -63,15 +64,15 @@ export function renderHistory() {
         ${wdOrder.map((d) => `<div class="cal-h">${DAY_SHORT[d].slice(0, 2)}</div>`).join('')}
         ${cells.join('')}
       </div>
-      <div class="legend"><span class="sw grad"></span>0 → 100% <span class="sw none"></span>No score <span class="sw skipped"></span>Skipped</div>
-      <p class="small">${scores.length ? `Month average <b>${pct100(mean(scores))}</b> · ${scores.filter((s) => s >= thr).length} good day${scores.filter((s) => s >= thr).length === 1 ? '' : 's'} of ${scores.length}` : '<span class="muted">No scored days this month.</span>'}</p>
+      <div class="legend"><span class="sw grad"></span>${state.settings.scoring === 'points' ? `0 → ${state.settings.dailyTarget || 100} pts` : '0 → 100%'} <span class="sw none"></span>No score <span class="sw skipped"></span>Skipped</div>
+      <p class="small">${scores.length ? `Month average <b>${scoresLabel(mean(scores))}</b> · ${scores.filter((s) => s >= thr).length} good day${scores.filter((s) => s >= thr).length === 1 ? '' : 's'} of ${scores.length}` : '<span class="muted">No scored days this month.</span>'}</p>
     </section>
     <section class="card">
       <div class="month-nav"><h3>Day score trend</h3>
         <div class="chips">${[30, 90, 365].map((r) => `<button class="chip-btn${r === n ? ' on' : ''}" data-a="histRange" data-r="${r}">${r === 365 ? '1y' : r + 'd'}</button>`).join('')}</div></div>
       ${scoreLine({ points, avg, markers })}
       <div class="legend"><span class="sw line-daily"></span>Daily <span class="sw line-avg"></span>7-day average ${markers.length ? '<span class="sw marker"></span>Goal settings changed' : ''}</div>
-      <p class="muted small">Average ${pct100(ps.average)} over ${ps.scoredDays} scored day${ps.scoredDays === 1 ? '' : 's'}.</p>
+      <p class="muted small">Average ${scoresLabel(ps.average)} over ${ps.scoredDays} scored day${ps.scoredDays === 1 ? '' : 's'}.</p>
     </section>`;
 }
 

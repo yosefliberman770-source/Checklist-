@@ -3,7 +3,7 @@
 // applies from a date the user picks, so history keeps its meaning.
 
 import { app, openSheet, closeSheet, toast, go, PALETTE } from '../ctx.js';
-import { WEIGHTS, DIFFICULTIES, goalPoints, MAX_OPTION_WORTH, BONUS_SIZES, DEFAULT_BONUS_POINTS, DEFAULT_BONUS_CAP, applyVersion, evaluate, versionFor, isScheduled, hasTarget, totalModeAllowed, partsShareUnit } from '../engine.js';
+import { WEIGHTS, POINT_LEVELS, EXTRA_LEVELS, basePoints, extraPoints, scoringMode, dailyTarget, goalPoints, MAX_OPTION_WORTH, BONUS_SIZES, DEFAULT_BONUS_POINTS, DEFAULT_BONUS_CAP, applyVersion, evaluate, versionFor, isScheduled, hasTarget, totalModeAllowed, partsShareUnit } from '../engine.js';
 import { describe, pct, statusLabel } from '../format.js';
 import { sortedCats, catLabel, findCatByName, createCategory } from './categories.js';
 import { esc, uid, deepClone, DAY_SHORT, DAY_LONG, addDays, weekday, fmtDate } from '../util.js';
@@ -36,7 +36,7 @@ const TARGET_TYPES = [
 ];
 
 const MEANING_KEYS = ['kind', 'unit', 'precision', 'allowNegative', 'target', 'dayTargets', 'credit', 'cap',
-  'weight', 'difficulty', 'scored', 'bonus', 'bonusPoints', 'schedule', 'parts', 'partMode', 'partWeighting'];
+  'points', 'extraPoints', 'scored', 'bonus', 'bonusPoints', 'schedule', 'parts', 'partMode', 'partWeighting'];
 
 function guessPreset(cfg) {
   if (cfg.partMode === 'best' && (cfg.parts || []).length) return 'choice';
@@ -66,7 +66,7 @@ export function newDraft() {
     isNew: true, name: '', shortName: '', description: '', notes: '', icon: '', color: '', categoryId: '',
     pinned: false, step: '', start: app.today, end: '', preset: 'check',
     kind: 'check', unit: '', precision: 0, allowNegative: false, target: blankTarget(), dayTargets: {},
-    credit: 'partial', cap: 1, weight: 2, difficulty: 1, scored: true, bonus: false, bonusPoints: DEFAULT_BONUS_POINTS,
+    credit: 'partial', cap: 1, weight: 2, points: 10, extraPoints: 0, scored: true, bonus: false, bonusPoints: DEFAULT_BONUS_POINTS,
     schedule: { type: 'daily', days: [1, 2, 3, 4, 5], every: 2, anchor: '', dates: [] },
     parts: [], partMode: 'each', partWeighting: 'target', _newDate: app.today,
   };
@@ -95,6 +95,9 @@ export function draftFromGoal(goal) {
     return { ...p, name: meta.name || '', step: meta.step ?? '', target: { ...blankTarget(), ...(p.target || {}) } };
   });
   if (!(Number(d.bonusPoints) > 0)) d.bonusPoints = DEFAULT_BONUS_POINTS;
+  d.points = basePoints(v);
+  d.extraPoints = Math.round(extraPoints(v) * 10) / 10;
+  delete d.difficulty;
   d.preset = guessPreset(d);
   return d;
 }
@@ -130,8 +133,8 @@ export function configFromDraft(d) {
     ...base,
     dayTargets: {},
     cap: base.target.type === 'atLeast' && base.credit === 'partial' ? Number(d.cap) || 1 : 1,
-    weight: Number(d.weight) > 0 ? Number(d.weight) : 2,
-    difficulty: Number(d.difficulty) > 0 ? Number(d.difficulty) : 1,
+    points: Number(d.points) > 0 ? Number(d.points) : 10,
+    extraPoints: Math.max(0, Number(d.extraPoints) || 0),
     scored: !!d.scored,
     bonus: !!d.scored && !!d.bonus,
     ...(d.scored && d.bonus ? { bonusPoints: Number(d.bonusPoints) > 0 ? Number(d.bonusPoints) : DEFAULT_BONUS_POINTS } : {}),
@@ -411,6 +414,8 @@ function summaryHtml(d) {
     if (cfg.bonus) {
       const capS = app.state.settings.bonusCap;
       html += `<div class="muted small">Adds +${cfg.bonusPoints} to your day score when done${capS === 'none' ? '' : ` (all bonuses together: at most +${capS ?? DEFAULT_BONUS_CAP} a day)`}. Skipping it costs nothing.</div>`;
+    } else if (scoringMode(app.state.settings) === 'points') {
+      html += `<div class="muted small">Doing it earns ${goalPoints(cfg)} of your ${dailyTarget(app.state.settings)} daily points.</div>`;
     } else if (s) html += `<div class="muted small">Worth about ${Math.round(s.share * 100)}% of ${day} score.</div>`;
   }
   return html;
@@ -463,11 +468,7 @@ export function renderEditor() {
       ${d.scored && d.bonus ? `<div class="field"><span>Bonus worth</span>
         <div class="seg">${BONUS_SIZES.map((n) => `<button type="button" class="${Number(d.bonusPoints) === n ? 'on' : ''}" data-a="edSet" data-path="bonusPoints" data-v="${n}">+${n}</button>`).join('')}</div>
         <p class="muted small">Points added to your day (out of 100) when you do it.</p></div>`
-      : `<div class="field"><span>How much does it matter?</span>${weightSeg('weight', d.weight)}
-        <p class="muted small">Each step counts twice as much as the one before.</p></div>
-      <div class="field"><span>How hard is it? <em class="muted">(optional)</em></span>
-        <div class="seg">${DIFFICULTIES.map((x) => `<button type="button" class="${Number(d.difficulty || 1) === x.value ? 'on' : ''}" data-a="edSet" data-path="difficulty" data-v="${x.value}">${x.label}${x.value !== 1 ? `<small> ×${x.value === 0.5 ? '½' : x.value}</small>` : ''}</button>`).join('')}</div>
-        <p class="muted small">Harder goals are worth more points in your day, on top of importance — e.g. Low + Very hard counts as much as Normal.</p></div>`}
+      : pointsFields(d)}
 
       ${scoreModeField(d)}
 
@@ -520,6 +521,21 @@ export function renderEditor() {
       </details>` : ''}
     </div>
     ${d.isNew ? '' : `<div class="center"><button class="link" data-a="nav" data-href="#goal/${d.id}">View this goal's history and actions</button></div>`}`;
+}
+
+function pointsFields(d) {
+  const pts = scoringMode(app.state.settings) === 'points';
+  const base = Number(d.points) || 0, extra = Number(d.extraPoints) || 0;
+  const baseCustom = !POINT_LEVELS.some((x) => x.value === base);
+  const extraCustom = !EXTRA_LEVELS.some((x) => x.value === extra);
+  return `<div class="field"><span>${pts ? 'Points for doing it' : 'How much does it count?'}</span>
+      <div class="seg">${POINT_LEVELS.map((x) => `<button type="button" class="${base === x.value ? 'on' : ''}" data-a="edSet" data-path="points" data-v="${x.value}">${x.value}<small> ${x.label}</small></button>`).join('')}</div>
+      <div class="inline small-row"><span class="muted small">or exactly</span>${numInput('points', baseCustom ? d.points : '', { placeholder: String(base || 10), unit: 'points' })}</div>
+      <p class="muted small">${pts ? `What you earn when you do it. Your daily goal is ${dailyTarget(app.state.settings)} points, and skipping a task never takes points away.` : 'Bigger numbers count more in your day.'}</p></div>
+    <div class="field"><span>How hard is it? <em class="muted">(optional)</em></span>
+      <div class="seg">${EXTRA_LEVELS.map((x) => `<button type="button" class="${extra === x.value ? 'on' : ''}" data-a="edSet" data-path="extraPoints" data-v="${x.value}">${x.label}${x.value ? `<small> +${x.value}</small>` : ''}</button>`).join('')}</div>
+      <div class="inline small-row"><span class="muted small">or extra</span>${numInput('extraPoints', extraCustom ? d.extraPoints : '', { placeholder: '0', unit: 'points' })}</div>
+      <p class="muted small">Extra points on top of the regular ones${base ? ` — this goal is worth <b>${base + extra} points</b> in total` : ''}.</p></div>`;
 }
 
 function scoreModeField(d) {

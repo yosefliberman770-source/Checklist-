@@ -50,7 +50,11 @@ you pick. It works even when the app is closed; delete the event to stop it.
 - **Importance** (Low · Normal · High · Top, each twice the one before) sets how much a goal affects
   your score. Optional **difficulty** (Easy ×½ · Normal · Hard ×1.5 · Very hard ×2) multiplies it, so a
   low-priority but hard goal can be worth more points.
-- **Day score** = weighted average of each scheduled goal's credit (0–100%). Unscheduled goals never
+- **Points mode (default).** Every task is worth points (5 · 10 · 20 · 40 or any number), hard tasks give
+  extra points on top (+5 · +10 or any number), and the aim is a daily points goal (100 by default).
+  Skipping a task never takes points away, so you can have lots of tasks and pick what to do.
+  Settings → *How your day is scored* switches to percent mode.
+- **Percent mode: day score** = weighted average of each scheduled goal's credit (0–100%). Unscheduled goals never
   count as failures; excused goals and skipped days are left out; a missing entry is a miss — never a 0
   value that accidentally "meets" a *no more than* goal. Tap the score for the exact breakdown.
 - **Either/or goals.** One goal, several options, do any one: e.g. *Exercise* = Workout 10 min (worth 100%)

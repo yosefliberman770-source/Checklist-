@@ -24,6 +24,8 @@ export function defaultState() {
       reminderTime: '21:00',
       lastBackup: null,
       bonusCap: 10,
+      scoring: 'points',
+      dailyTarget: 100,
     },
     categories: [],
     goals: [],
