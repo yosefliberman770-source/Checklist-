@@ -2,7 +2,7 @@
 
 import { app, openSheet, closeSheet, toast, goalColor } from '../ctx.js';
 import { sortedCats, catLabel } from './categories.js';
-import { dayScore, effectiveTarget, evaluate, versionFor, optionWorth } from '../engine.js';
+import { dayScore, effectiveTarget, evaluate, versionFor, optionWorth, optionBonus } from '../engine.js';
 import { getRec, setRec } from '../store.js';
 import { esc, addDays, fmtDate } from '../util.js';
 import { fmtValue, targetShort, targetText, statusLabel, pct, fmtNum } from '../format.js';
@@ -75,7 +75,9 @@ function progressBar(item) {
 }
 
 function rowMeta(item, cfg) {
-  const st = cfg.partMode === 'best' && item.met && (item.credit ?? 0) > 1 ? { text: '⭐ Extra credit', cls: 'exceeded' }
+  const ob = (item.optionBonuses || []).reduce((a, b) => a + b.points, 0);
+  const st = cfg.partMode === 'best' && !item.met && item.status === 'logged' && ob > 0 ? { text: `⭐ +${Math.round(ob)} bonus`, cls: 'exceeded' }
+    : cfg.partMode === 'best' && item.met && (item.credit ?? 0) > 1 ? { text: '⭐ Extra credit', cls: 'exceeded' }
     : cfg.partMode === 'best' && item.met && (item.credit ?? 0) < 1 ? { text: 'Done', cls: 'partial' } : statusLabel(item);
   const parts = item.parts?.length;
   let val = '';
@@ -93,7 +95,8 @@ function rowMeta(item, cfg) {
   }
   const progress = item.hasTarget && item.status === 'logged' && item.progress != null && !parts && cfg.kind !== 'check' &&
     cfg.target?.type === 'atLeast' ? ` · ${pct(item.progress)}` : '';
-  const partsPct = parts && item.status === 'logged' && item.credit != null ? ` · ${pct(item.credit)}` : '';
+  const partsPct = (parts && item.status === 'logged' && item.credit != null ? ` · ${pct(item.credit)}` : '') +
+    (cfg.partMode === 'best' && item.met && ob > 0 ? ` · ⭐ +${Math.round(ob)}` : '');
   return `<span class="g-meta">${esc(val)}${progress}${partsPct}${st.text ? ` <span class="chip ${st.cls}">${st.text}</span>` : ''}${item.note ? ' <span class="noteflag" title="Has a note">✎</span>' : ''}</span>`;
 }
 
@@ -117,7 +120,7 @@ function goalRow(item, ro) {
       const st = p.excused ? { text: 'Excused', cls: 'excused' } :
         p.logged ? (p.ev?.hasTarget ? statusLabel({ ...p.ev, status: 'logged', hasTarget: true }) : { text: 'Logged', cls: 'logged' }) : { text: p.cfg.optional ? 'Optional' : '', cls: 'pending' };
       const ts = (p.cfg.kind === 'check' ? '' : targetShort(p.cfg, app.ui.date)) +
-        (cfg.partMode === 'best' ? `${p.cfg.kind === 'check' ? '' : ' · '}worth ${Math.round(optionWorth(p.cfg) * 100)}%${optionWorth(p.cfg) > 1 ? ' ⭐' : ''}` : '');
+        (cfg.partMode === 'best' ? `${p.cfg.kind === 'check' ? '' : ' · '}worth ${Math.round(optionWorth(p.cfg) * 100)}%${optionWorth(p.cfg) > 1 ? ' ⭐' : ''}${optionBonus(p.cfg) ? ` · +${optionBonus(p.cfg)} bonus` : ''}` : '');
       return `<div class="part-row">
         <button class="g-main" data-a="entry" data-g="${g.id}" data-p="${p.partId}">
           <span class="g-text"><span class="g-name">${esc(meta.name)}</span>
@@ -466,10 +469,10 @@ export const todayActions = {
     const bonus = ds.breakdown.filter((b) => b.bonus);
     const base = (100 * ds.earned) / ds.weightSum;
     const lostSum = regular.reduce((a, b) => a + b.lost, 0);
-    const name = (b) => `${esc(b.item.goal.icon || '')} ${esc(b.item.goal.name)}`;
+    const name = (b) => `${esc(b.item.goal.icon || '')} ${esc(b.item.goal.name)}${b.optionBonus ? ` · ${esc(partMeta(b.item.goal, b.partId).name)}` : ''}`;
     openSheet(`
       <div class="sheet-head"><h2>${pct(ds.score)} · ${esc(dayTitle(app.ui.date))}</h2><button class="x" data-a="closeSheet" aria-label="Close">✕</button></div>
-      <p class="muted small">Each goal is worth its share of the day (set by its importance). Points earned + points lost = 100.</p>
+      <p class="muted small">Each goal is worth its share of the day (set by its importance and difficulty). Points earned + points lost = 100.</p>
       <table class="tbl">
         <thead><tr><th>Goal</th><th class="num">Worth</th><th class="num">Earned</th><th class="num">Lost</th></tr></thead>
         <tbody>${regular.map((b) => `<tr>

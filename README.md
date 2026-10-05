@@ -47,13 +47,15 @@ you pick. It works even when the app is closed; delete the event to stop it.
 - **Categories like playlists.** The Goals tab shows your categories as cards (e.g. 📚 Reading) or all
   goals in one list. Open a category to see its goals (Fiction, Nonfiction, History…), add a new goal
   there, or move existing goals in. Categories organize; they never change your score.
-- **Importance** (Low · Normal · High · Top, each twice the one before) is the only thing that sets how
-  much a goal affects your score.
+- **Importance** (Low · Normal · High · Top, each twice the one before) sets how much a goal affects
+  your score. Optional **difficulty** (Easy ×½ · Normal · Hard ×1.5 · Very hard ×2) multiplies it, so a
+  low-priority but hard goal can be worth more points.
 - **Day score** = weighted average of each scheduled goal's credit (0–100%). Unscheduled goals never
   count as failures; excused goals and skipped days are left out; a missing entry is a miss — never a 0
   value that accidentally "meets" a *no more than* goal. Tap the score for the exact breakdown.
 - **Either/or goals.** One goal, several options, do any one: e.g. *Exercise* = Workout 10 min (worth 100%)
-  **or** Stretch 10 min (worth 75%). The goal earns the best option you did. Make one with
+  **or** Stretch 10 min (worth 75%). The goal earns the best option you did; an option can be worth
+  over 100% (extra credit) and/or add fixed bonus points. Make one with
   *How is it measured? → Either / or*, or **+ Either/or here** inside a category.
 - **Bonus goals.** Set *In your day score → ⭐ Bonus*: doing it adds points, skipping it never costs
   any, and the day still tops out at 100%.

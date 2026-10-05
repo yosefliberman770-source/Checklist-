@@ -3,7 +3,7 @@
 // applies from a date the user picks, so history keeps its meaning.
 
 import { app, openSheet, closeSheet, toast, go, PALETTE } from '../ctx.js';
-import { WEIGHTS, MAX_OPTION_WORTH, BONUS_SIZES, DEFAULT_BONUS_POINTS, DEFAULT_BONUS_CAP, applyVersion, evaluate, versionFor, isScheduled, hasTarget, totalModeAllowed, partsShareUnit } from '../engine.js';
+import { WEIGHTS, DIFFICULTIES, goalPoints, MAX_OPTION_WORTH, BONUS_SIZES, DEFAULT_BONUS_POINTS, DEFAULT_BONUS_CAP, applyVersion, evaluate, versionFor, isScheduled, hasTarget, totalModeAllowed, partsShareUnit } from '../engine.js';
 import { describe, pct, statusLabel } from '../format.js';
 import { sortedCats, catLabel, findCatByName, createCategory } from './categories.js';
 import { esc, uid, deepClone, DAY_SHORT, DAY_LONG, addDays, weekday, fmtDate } from '../util.js';
@@ -36,7 +36,7 @@ const TARGET_TYPES = [
 ];
 
 const MEANING_KEYS = ['kind', 'unit', 'precision', 'allowNegative', 'target', 'dayTargets', 'credit', 'cap',
-  'weight', 'scored', 'bonus', 'bonusPoints', 'schedule', 'parts', 'partMode', 'partWeighting'];
+  'weight', 'difficulty', 'scored', 'bonus', 'bonusPoints', 'schedule', 'parts', 'partMode', 'partWeighting'];
 
 function guessPreset(cfg) {
   if (cfg.partMode === 'best' && (cfg.parts || []).length) return 'choice';
@@ -66,7 +66,7 @@ export function newDraft() {
     isNew: true, name: '', shortName: '', description: '', notes: '', icon: '', color: '', categoryId: '',
     pinned: false, step: '', start: app.today, end: '', preset: 'check',
     kind: 'check', unit: '', precision: 0, allowNegative: false, target: blankTarget(), dayTargets: {},
-    credit: 'partial', cap: 1, weight: 2, scored: true, bonus: false, bonusPoints: DEFAULT_BONUS_POINTS,
+    credit: 'partial', cap: 1, weight: 2, difficulty: 1, scored: true, bonus: false, bonusPoints: DEFAULT_BONUS_POINTS,
     schedule: { type: 'daily', days: [1, 2, 3, 4, 5], every: 2, anchor: '', dates: [] },
     parts: [], partMode: 'each', partWeighting: 'target', _newDate: app.today,
   };
@@ -131,6 +131,7 @@ export function configFromDraft(d) {
     dayTargets: {},
     cap: base.target.type === 'atLeast' && base.credit === 'partial' ? Number(d.cap) || 1 : 1,
     weight: Number(d.weight) > 0 ? Number(d.weight) : 2,
+    difficulty: Number(d.difficulty) > 0 ? Number(d.difficulty) : 1,
     scored: !!d.scored,
     bonus: !!d.scored && !!d.bonus,
     ...(d.scored && d.bonus ? { bonusPoints: Number(d.bonusPoints) > 0 ? Number(d.bonusPoints) : DEFAULT_BONUS_POINTS } : {}),
@@ -153,7 +154,10 @@ export function configFromDraft(d) {
     cfg.parts = d.parts.map((p) => ({
       partId: p.partId, ...cleanMeasure(p), weight: Number(p.weight) > 0 ? Number(p.weight) : 2,
       optional: choice ? false : !!p.optional,
-      ...(choice ? { worth: Math.max(1, Math.min(MAX_OPTION_WORTH, Math.round(Number(p.worth) || 100))) } : {}),
+      ...(choice ? {
+        worth: Math.max(0, Math.min(MAX_OPTION_WORTH, Math.round(p.worth === '' || p.worth == null || Number.isNaN(Number(p.worth)) ? 100 : Number(p.worth)))),
+        bonusPoints: Number(p.bonusPoints) > 0 ? Number(p.bonusPoints) : 0,
+      } : {}),
     }));
     cfg.partMode = choice ? 'best' : d.partMode === 'total' && totalModeAllowed(cfg.parts) ? 'total' : 'each';
     cfg.partWeighting = d.partWeighting === 'equal' ? 'equal' : 'target';
@@ -209,7 +213,7 @@ function validate(d) {
     d.parts.forEach((p, i) => {
       if (!p.name.trim()) errs.push(`Option ${i + 1}: give it a name.`);
       const w = Number(p.worth);
-      if (!(w >= 1 && w <= MAX_OPTION_WORTH)) errs.push(`${p.name || `Option ${i + 1}`}: worth must be between 1% and ${MAX_OPTION_WORTH}%.`);
+      if (!(w >= 0 && w <= MAX_OPTION_WORTH) || p.worth === '') errs.push(`${p.name || `Option ${i + 1}`}: worth must be between 1% and ${MAX_OPTION_WORTH}%.`);
       errs.push(...validateMeasure(p, p.name || `Option ${i + 1}`));
     });
   } else if (d.parts.length) {
@@ -345,9 +349,13 @@ function optionCard(p, i, d) {
     <div class="field compact"><span>Worth if you choose this</span>
       <div class="inline worth-row">
         <span class="inline-num"><input type="text" inputmode="numeric" data-bind="${pre}worth" value="${val(p.worth)}" aria-label="Worth percent"><span class="unit">%</span></span>
-        ${[25, 50, 75, 100, 125, 150].map((n) => `<button type="button" class="chip-btn${Number(p.worth) === n ? ' on' : ''}${n > 100 ? ' extra' : ''}" data-a="edSet" data-path="${pre}worth" data-v="${n}">${n}%</button>`).join('')}
+        ${[0, 25, 50, 75, 100, 125, 150].map((n) => `<button type="button" class="chip-btn${Number(p.worth) === n ? ' on' : ''}${n > 100 ? ' extra' : ''}" data-a="edSet" data-path="${pre}worth" data-v="${n}">${n}%</button>`).join('')}
       </div>
-      ${Number(p.worth) > 100 ? `<p class="muted small">⭐ Extra credit: choosing this earns more than a full goal, which can make up for other goals you missed that day. Your day still tops out at 100%.</p>` : ''}</div>
+      ${Number(p.worth) > 100 ? `<p class="muted small">⭐ Extra credit: choosing this earns more than a full goal, which can make up for other goals you missed that day. Your day still tops out at 100%.</p>` : ''}
+      ${String(p.worth) === '0' ? `<p class="muted small">0% = this option doesn't complete the goal${Number(p.bonusPoints) > 0 ? '; it only adds its bonus points' : ' (give it bonus points below, or it does nothing)'}.</p>` : ''}</div>
+    <div class="field compact"><span>Bonus points if you do it <em class="muted">(optional)</em></span>
+      <div class="seg small">${[0, ...BONUS_SIZES].map((n) => `<button type="button" class="${(Number(p.bonusPoints) || 0) === n ? 'on' : ''}" data-a="edSet" data-path="${pre}bonusPoints" data-v="${n}">${n ? `+${n}` : 'None'}</button>`).join('')}</div>
+      <p class="muted small">Added on top of the goal's credit, like a bonus goal — counts toward your daily bonus limit.</p></div>
   </div>`;
 }
 
@@ -378,15 +386,15 @@ function shareOfDay(d, cfg) {
   for (let k = 0; k < 14; k++) {
     const date = addDays(app.today, k);
     if (!isScheduled(temp, date)) continue;
-    let W = cfg.bonus ? 0 : cfg.weight;
+    let W = cfg.bonus ? 0 : goalPoints(cfg);
     for (const g of app.state.goals) {
       if (g.id === d.id || g.state !== 'active') continue;
       const v = versionFor(g, date);
       const scoredGoal = v.scored && !v.bonus && v.schedule?.type !== 'anytime' &&
         (v.parts?.length ? v.parts.some((p) => !p.optional && hasTarget(p)) : hasTarget(v));
-      if (scoredGoal && isScheduled(g, date, v)) W += Number(v.weight) || 0;
+      if (scoredGoal && isScheduled(g, date, v)) W += goalPoints(v);
     }
-    return { share: W > 0 ? cfg.weight / W : null, date };
+    return { share: W > 0 ? goalPoints(cfg) / W : null, date };
   }
   return null;
 }
@@ -456,7 +464,10 @@ export function renderEditor() {
         <div class="seg">${BONUS_SIZES.map((n) => `<button type="button" class="${Number(d.bonusPoints) === n ? 'on' : ''}" data-a="edSet" data-path="bonusPoints" data-v="${n}">+${n}</button>`).join('')}</div>
         <p class="muted small">Points added to your day (out of 100) when you do it.</p></div>`
       : `<div class="field"><span>How much does it matter?</span>${weightSeg('weight', d.weight)}
-        <p class="muted small">Each step counts twice as much as the one before. Only this affects your score — not the target or difficulty.</p></div>`}
+        <p class="muted small">Each step counts twice as much as the one before.</p></div>
+      <div class="field"><span>How hard is it? <em class="muted">(optional)</em></span>
+        <div class="seg">${DIFFICULTIES.map((x) => `<button type="button" class="${Number(d.difficulty || 1) === x.value ? 'on' : ''}" data-a="edSet" data-path="difficulty" data-v="${x.value}">${x.label}${x.value !== 1 ? `<small> ×${x.value === 0.5 ? '½' : x.value}</small>` : ''}</button>`).join('')}</div>
+        <p class="muted small">Harder goals are worth more points in your day, on top of importance — e.g. Low + Very hard counts as much as Normal.</p></div>`}
 
       ${scoreModeField(d)}
 

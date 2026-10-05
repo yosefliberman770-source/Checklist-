@@ -1,6 +1,6 @@
 // Turning numbers and configuration into words the user reads.
 
-import { effectiveTarget, WEIGHTS } from './engine.js';
+import { effectiveTarget, WEIGHTS, DIFFICULTIES } from './engine.js';
 import { DAY_SHORT, fmtDate } from './util.js';
 
 export function fmtDur(min) {
@@ -59,6 +59,8 @@ export function targetShort(m, date) {
   }
 }
 
+export const difficultyLabel = (v) => DIFFICULTIES.find((x) => x.value === Number(v))?.label || `×${v}`;
+
 export function weightLabel(w) {
   const hit = WEIGHTS.find((x) => x.value === Number(w));
   return hit ? hit.label : `Custom (${w})`;
@@ -91,7 +93,12 @@ export function describe(cfg, { includeWeight = true } = {}) {
   const parts = cfg.parts || [];
   let what;
   if (parts.length && cfg.partMode === 'best') {
-    what = 'Either/or: ' + (parts.map((p) => `${p.name || '…'}${Number(p.worth) && Number(p.worth) !== 100 ? ` (${p.worth}%)` : ''}`).join(' or '));
+    what = 'Either/or: ' + (parts.map((p) => {
+      const tags = [];
+      if (p.worth !== undefined && p.worth !== '' && Number(p.worth) !== 100) tags.push(`${p.worth}%`);
+      if (Number(p.bonusPoints) > 0) tags.push(`+${p.bonusPoints} bonus`);
+      return `${p.name || '…'}${tags.length ? ` (${tags.join(', ')})` : ''}`;
+    }).join(' or '));
   } else if (parts.length) {
     const names = parts.map((p) => p.name).filter(Boolean);
     what = `${parts.length} part${parts.length > 1 ? 's' : ''}${names.length ? ` (${names.join(', ')})` : ''}`;
@@ -113,7 +120,10 @@ export function describe(cfg, { includeWeight = true } = {}) {
       cfg.kind === 'check' || cfg.target?.type !== 'none');
   if (!cfg.scored || !scoredPossible) bits.push('not in score');
   else if (cfg.bonus) bits.push(`⭐ bonus +${Number(cfg.bonusPoints) > 0 ? cfg.bonusPoints : 2}`);
-  else if (includeWeight) bits.push(`importance: ${weightLabel(cfg.weight)}`);
+  else if (includeWeight) {
+    const dif = Number(cfg.difficulty) > 0 ? Number(cfg.difficulty) : 1;
+    bits.push(`importance: ${weightLabel(cfg.weight)}${dif !== 1 ? ` · ${difficultyLabel(dif).toLowerCase()} (×${dif === 0.5 ? '½' : dif})` : ''}`);
+  }
   return bits.join(' · ');
 }
 

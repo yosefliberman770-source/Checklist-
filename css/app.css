@@ -246,6 +246,7 @@ body[data-route="edit"] .tabbar, body[data-route="new"] .tabbar { display: none;
 .seg button { flex: 1; border: 0; background: var(--surface); padding: 10px 4px; min-height: 42px; font-size: .92rem; }
 .seg button + button { border-left: 1px solid var(--line); }
 .seg button.on { background: var(--accent); color: var(--accent-ink); font-weight: 600; }
+.seg button small { font-size: .72rem; opacity: .8; margin-left: 2px; }
 .seg.big button { padding: 14px; font-size: 1.05rem; }
 .seg.small button { min-height: 34px; padding: 6px 2px; font-size: .82rem; }
 .radio { display: flex; gap: 10px; align-items: flex-start; padding: 10px 0; border-bottom: 1px solid var(--line); }

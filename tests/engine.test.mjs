@@ -303,3 +303,41 @@ test('either/or option worth over 100% is extra credit, day still capped', () =>
   // both done: capped at 100%
   assert.equal(dayScore(st([a, ex], { [recKey(D, 'a')]: rec(true), [recKey(D, 'ex', 'r')]: rec(true) }), D, TODAY).score, 1);
 });
+
+test('either/or option can add fixed bonus points (shared daily cap)', () => {
+  const ex = goal('ex', {
+    kind: 'number', partMode: 'best',
+    parts: [
+      { partId: 'w', kind: 'check', worth: 100 },
+      { partId: 's', kind: 'check', worth: 75, bonusPoints: 5 },
+      { partId: 'y', kind: 'check', worth: 0, bonusPoints: 3 },
+    ],
+  });
+  const a = goal('a', { kind: 'check' });
+  const recs = { [recKey(D, 'ex', 's')]: rec(true) };
+  // (0 + 0.75) / 2 = 37.5% + 5 bonus points
+  const d1 = dayScore(st([a, ex], recs), D, TODAY);
+  close(d1.score, 0.425);
+  close(d1.bonusPoints, 5);
+  // a 0%-worth option gives only its bonus points and doesn't count as done
+  const d2 = goalDay(ex, D, { [recKey(D, 'ex', 'y')]: rec(true) }, TODAY);
+  assert.equal(d2.credit, 0);
+  assert.equal(d2.met, false);
+  close(dayScore(st([a, ex], { [recKey(D, 'ex', 'y')]: rec(true) }), D, TODAY).score, 0.03);
+  // every option done adds its bonus; capped by the daily limit
+  const both = { [recKey(D, 'ex', 's')]: rec(true), [recKey(D, 'ex', 'y')]: rec(true) };
+  close(dayScore(st([a, ex], both), D, TODAY).bonusPoints, 8);
+  close(dayScore(st([a, ex], both, { bonusCap: 6 }), D, TODAY).bonusPoints, 6);
+});
+
+test('difficulty multiplies a goal\'s points: low priority but hard can outweigh', () => {
+  const easy = goal('e', { kind: 'check', weight: 4 });                 // High, normal difficulty = 4
+  const hard = goal('h', { kind: 'check', weight: 1, difficulty: 2 });  // Low, very hard = 2
+  const big = goal('b', { kind: 'check', weight: 1, difficulty: 2 });
+  assert.equal(goalDay(hard, D, {}, TODAY).weight, 2);
+  // only the hard one done: 2 / (4 + 2)
+  close(dayScore(st([easy, hard], { [recKey(D, 'h')]: rec(true) }), D, TODAY).score, 2 / 6);
+  // a Low+Very hard goal is worth twice a Low+Normal goal
+  const low = goal('l', { kind: 'check', weight: 1 });
+  close(dayScore(st([low, big], { [recKey(D, 'b')]: rec(true) }), D, TODAY).score, 2 / 3);
+});

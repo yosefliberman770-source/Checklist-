@@ -2,7 +2,7 @@
 
 import { app, openSheet, closeSheet, toast, go, goalColor } from '../ctx.js';
 import { inPause, dayScore, periodStats, consistencyRanking, goalDay, partsShareUnit, effectiveTarget } from '../engine.js';
-import { describe, fmtValue, pct, targetText, weightLabel, scheduleText, statusLabel } from '../format.js';
+import { describe, fmtValue, pct, targetText, weightLabel, difficultyLabel, scheduleText, statusLabel } from '../format.js';
 import { esc, addDays, fmtDate, dateRange } from '../util.js';
 import { countRecords, deleteGoalForever } from '../store.js';
 import { valueBars } from '../charts.js';
@@ -102,6 +102,7 @@ function diffText(goal, a, b) {
   }
   if (JSON.stringify(a.dayTargets || {}) !== JSON.stringify(b.dayTargets || {})) out.push('day-specific targets changed');
   if (Number(a.weight) !== Number(b.weight)) out.push(`importance ${weightLabel(a.weight)} → ${weightLabel(b.weight)}`);
+  if (Number(a.difficulty || 1) !== Number(b.difficulty || 1)) out.push(`difficulty ${difficultyLabel(a.difficulty || 1)} → ${difficultyLabel(b.difficulty || 1)}`);
   if (JSON.stringify(a.schedule) !== JSON.stringify(b.schedule)) out.push(`days: ${scheduleText(a.schedule)} → ${scheduleText(b.schedule)}`);
   if (a.credit !== b.credit) out.push(b.credit === 'all' ? 'now all or nothing' : 'now partial credit');
   if (Number(a.cap || 1) !== Number(b.cap || 1)) out.push(`extra credit ${Math.round((a.cap || 1) * 100)}% → ${Math.round((b.cap || 1) * 100)}%`);

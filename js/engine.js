@@ -21,6 +21,18 @@ export const WEIGHTS = [
   { label: 'Top', value: 8 },
 ];
 
+// Difficulty is opt-in and separate from importance: a goal's points in the
+// day are importance × difficulty, so a low-priority but hard goal can be
+// worth more than an easy one.
+export const DIFFICULTIES = [
+  { label: 'Easy', value: 0.5 },
+  { label: 'Normal', value: 1 },
+  { label: 'Hard', value: 1.5 },
+  { label: 'Very hard', value: 2 },
+];
+export const difficultyOf = (v) => (Number(v.difficulty) > 0 ? Number(v.difficulty) : 1);
+export const goalPoints = (v) => (Number(v.weight) || 0) * difficultyOf(v);
+
 export const recKey = (date, goalId, partId = '') => `${date}|${goalId}|${partId || ''}`;
 
 // ---------- versions & schedules ----------
@@ -182,7 +194,10 @@ export function totalModeAllowed(parts) {
 // 100% is extra credit: it can make up for other goals that day, while the
 // day itself still tops out at 100%.
 export const MAX_OPTION_WORTH = 200;
-export const optionWorth = (pc) => (Number(pc.worth) > 0 ? Math.min(MAX_OPTION_WORTH, Number(pc.worth)) / 100 : 1);
+export const optionWorth = (pc) => (pc.worth === '' || pc.worth == null || Number.isNaN(Number(pc.worth))
+  ? 1 : clamp(Number(pc.worth), 0, MAX_OPTION_WORTH) / 100);
+// Fixed bonus points an option adds when done (on top of the goal's credit).
+export const optionBonus = (pc) => (Number(pc.bonusPoints) > 0 ? Number(pc.bonusPoints) : 0);
 
 export function goalDay(goal, date, records, today) {
   const v = versionFor(goal, date);
@@ -192,7 +207,7 @@ export function goalDay(goal, date, records, today) {
   const goalRec = records[recKey(date, goal.id)];
   const base = {
     goal, version: v, date, scheduled, active,
-    weight: Number(v.weight) || 0,
+    weight: goalPoints(v),
     scored: !!v.scored && (v.schedule?.type !== 'anytime'),
     bonus: !!v.scored && !!v.bonus,
     bonusValue: Number(v.bonusPoints) > 0 ? Number(v.bonusPoints) : DEFAULT_BONUS_POINTS,
@@ -252,8 +267,12 @@ export function goalDay(goal, date, records, today) {
         if (c > best || (c === best && !bestPart && p.logged)) { best = c; bestPart = p; }
       }
       credit = best;
-      met = counted.some((p) => p.logged && p.ev?.met);
+      met = counted.some((p) => p.logged && p.ev?.met && optionWorth(p.cfg) > 0);
       exceeded = best > 1;
+      // Every option done adds its fixed bonus points (partial progress → part of them).
+      base.optionBonuses = counted.filter((p) => p.logged && optionBonus(p.cfg) > 0)
+        .map((p) => ({ partId: p.partId, points: optionBonus(p.cfg) * Math.min(1, p.credit || 0) }))
+        .filter((b) => b.points > 0);
       base.chosen = bestPart && bestPart.logged ? bestPart.partId : null;
     } else if (v.partMode === 'total' && totalModeAllowed(partCfgs)) {
       const ev = evaluate(
@@ -327,6 +346,8 @@ export function dayScore(state, date, today) {
   let earned = 0, bonusRaw = 0;
   for (const i of counted) earned += i.weight * (i.credit || 0);
   for (const i of bonus) bonusRaw += i.bonusValue * Math.min(1, i.credit || 0);
+  const optionBonusItems = scoredItems.filter((i) => i.status === 'logged' && i.optionBonuses?.length);
+  for (const i of optionBonusItems) for (const b of i.optionBonuses) bonusRaw += b.points;
   const capSetting = state.settings.bonusCap;
   const bonusCap = capSetting === 'none' ? Infinity : Number(capSetting ?? DEFAULT_BONUS_CAP);
   res.weightSum = W;
@@ -334,7 +355,8 @@ export function dayScore(state, date, today) {
   res.bonusRaw = bonusRaw;
   res.bonusCap = bonusCap;
   res.bonusPoints = Math.min(bonusRaw, bonusCap);
-  res.bonusDone = bonus.filter((i) => (i.credit || 0) > 0).length;
+  res.bonusDone = bonus.filter((i) => (i.credit || 0) > 0).length +
+    optionBonusItems.reduce((a, i) => a + i.optionBonuses.length, 0);
   res.score = Math.min(1, earned / W + res.bonusPoints / 100);
   res.metCount = counted.filter((i) => i.met).length;
   res.pendingCount = counted.filter((i) => i.status === 'pending').length;
@@ -344,6 +366,14 @@ export function dayScore(state, date, today) {
     contribution: (100 * i.weight * (i.credit || 0)) / W,
     lost: (100 * i.weight * (1 - Math.min(1, i.credit || 0))) / W,
   }));
+  for (const i of optionBonusItems) {
+    for (const b of i.optionBonuses) {
+      res.breakdown.push({
+        goalId: i.goal.id, item: i, weight: 0, credit: 0, bonus: true, optionBonus: true, partId: b.partId,
+        share: b.points, contribution: b.points, lost: 0,
+      });
+    }
+  }
   for (const i of bonus) {
     res.breakdown.push({
       goalId: i.goal.id, item: i, weight: i.weight, credit: i.credit || 0, bonus: true,
