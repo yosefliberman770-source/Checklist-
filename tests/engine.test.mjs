@@ -233,26 +233,30 @@ test('consistency ranking: most to least consistent, with too-little-data last',
   close(r.rows[0].delta, 1); // 0% in the previous 4 days → 100% now
 });
 
-test('bonus goals only help: done adds, skipped never lowers, day capped at 100%', () => {
+test('bonus goals add fixed points: done adds, skipped never lowers, capped', () => {
   const a = goal('a', { kind: 'check', weight: 2 });
   const b = goal('b', { kind: 'check', weight: 2 });
-  const x = goal('x', { kind: 'check', weight: 1, bonus: true });
+  const x = goal('x', { kind: 'check', weight: 8, bonus: true, bonusPoints: 5 });
+  const y = goal('y', { kind: 'check', bonus: true }); // default +2
   const D2 = '2026-10-03';
-  // a done, b missed: 50%; skipping the bonus changes nothing
   const recs = { [recKey(D, 'a')]: rec(true), [recKey(D2, 'a')]: rec(true), [recKey(D2, 'x')]: rec(true) };
-  const s = st([a, b, x], recs);
+  const s = st([a, b, x, y], recs);
   const skip = dayScore(s, D, TODAY);
   close(skip.score, 0.5);
   assert.equal(skip.scheduledCount, 2);
-  assert.equal(goalDay(x, D, recs, TODAY).bonus, true);
-  // doing the bonus adds its weight on top: (2 + 1) / 4
+  // +5 points regardless of importance or how few regular goals there are
   const done = dayScore(s, D2, TODAY);
-  close(done.score, 0.75);
-  close(done.bonusPoints, 25);
-  assert.equal(done.bonusDone, 1);
-  // can't exceed 100%
+  close(done.score, 0.55);
+  close(done.bonusPoints, 5);
+  recs[recKey(D2, 'y')] = rec(true);
+  close(dayScore(s, D2, TODAY).score, 0.57);
+  // daily cap
+  s.settings.bonusCap = 3;
+  close(dayScore(s, D2, TODAY).score, 0.53);
+  s.settings.bonusCap = 'none';
+  close(dayScore(s, D2, TODAY).bonusPoints, 7);
+  // never above 100%
   recs[recKey(D2, 'b')] = rec(true);
-  assert.equal(dayScore(st([a, b, x], recs), D2, TODAY).score, 1);
-  // a day with only bonus goals has no score
+  assert.equal(dayScore(s, D2, TODAY).score, 1);
   assert.equal(dayScore(st([x], recs), D2, TODAY).score, null);
 });

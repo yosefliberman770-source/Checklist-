@@ -5,7 +5,14 @@
 
 import { addDays, diffDays, weekday, clamp, mean, median, dateRange } from './util.js';
 
-export const ENGINE_VERSION = 1;
+export const ENGINE_VERSION = 2;
+
+// Bonus goals add a fixed number of points (out of 100) when done, never a
+// share of the day — so a bonus is worth the same whether you have 2 goals
+// or 20. The total bonus per day is capped by a setting.
+export const BONUS_SIZES = [1, 2, 3, 5, 10];
+export const DEFAULT_BONUS_POINTS = 2;
+export const DEFAULT_BONUS_CAP = 10;
 
 export const WEIGHTS = [
   { label: 'Low', value: 1 },
@@ -182,6 +189,7 @@ export function goalDay(goal, date, records, today) {
     weight: Number(v.weight) || 0,
     scored: !!v.scored && (v.schedule?.type !== 'anytime'),
     bonus: !!v.scored && !!v.bonus,
+    bonusValue: Number(v.bonusPoints) > 0 ? Number(v.bonusPoints) : DEFAULT_BONUS_POINTS,
     note: goalRec?.note || '',
   };
 
@@ -293,14 +301,18 @@ export function dayScore(state, date, today) {
   const bonus = scoredItems.filter((i) => i.bonus && i.status === 'logged');
   const W = counted.reduce((a, i) => a + i.weight, 0);
   if (!counted.length || W <= 0) return res;
-  let earned = 0, bonusEarned = 0;
+  let earned = 0, bonusRaw = 0;
   for (const i of counted) earned += i.weight * (i.credit || 0);
-  for (const i of bonus) bonusEarned += i.weight * (i.credit || 0);
+  for (const i of bonus) bonusRaw += i.bonusValue * Math.min(1, i.credit || 0);
+  const capSetting = state.settings.bonusCap;
+  const bonusCap = capSetting === 'none' ? Infinity : Number(capSetting ?? DEFAULT_BONUS_CAP);
   res.weightSum = W;
   res.earned = earned;
-  res.bonusPoints = (100 * bonusEarned) / W;
+  res.bonusRaw = bonusRaw;
+  res.bonusCap = bonusCap;
+  res.bonusPoints = Math.min(bonusRaw, bonusCap);
   res.bonusDone = bonus.filter((i) => (i.credit || 0) > 0).length;
-  res.score = Math.min(1, (earned + bonusEarned) / W);
+  res.score = Math.min(1, earned / W + res.bonusPoints / 100);
   res.metCount = counted.filter((i) => i.met).length;
   res.pendingCount = counted.filter((i) => i.status === 'pending').length;
   res.breakdown = counted.map((i) => ({
@@ -312,7 +324,7 @@ export function dayScore(state, date, today) {
   for (const i of bonus) {
     res.breakdown.push({
       goalId: i.goal.id, item: i, weight: i.weight, credit: i.credit || 0, bonus: true,
-      share: (100 * i.weight) / W, contribution: (100 * i.weight * (i.credit || 0)) / W, lost: 0,
+      share: i.bonusValue, contribution: i.bonusValue * Math.min(1, i.credit || 0), lost: 0,
     });
   }
   return res;

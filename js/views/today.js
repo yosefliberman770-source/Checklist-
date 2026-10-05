@@ -479,7 +479,9 @@ export const todayActions = {
         <tbody>${bonus.map((b) => `<tr><td>⭐ ${name(b)}</td><td class="num bonus-pts">+${b.contribution.toFixed(1)}</td></tr>`).join('')}</tbody>
         <tfoot><tr><td>Day score</td><td class="num">${(ds.score * 100).toFixed(1)}</td></tr></tfoot>
       </table>
-      <p class="muted small">Bonus goals only add points. ${base + ds.bonusPoints > 100.05 ? `You earned ${(base + ds.bonusPoints).toFixed(1)}, but a day tops out at 100.` : 'Skipping a bonus never costs anything.'}</p>` : ''}
+      <p class="muted small">Bonus goals add their points on top; skipping one never costs anything.
+        ${ds.bonusRaw > ds.bonusPoints + 0.05 ? ` Bonuses are limited to +${ds.bonusCap} a day, so +${ds.bonusPoints.toFixed(0)} counted.` : ''}
+        ${base + ds.bonusPoints > 100.05 ? ` A day tops out at 100.` : ''}</p>` : ''}
       ${ds.excusedCount ? `<p class="muted small">${ds.excusedCount} excused goal(s) left out of this day.</p>` : ''}
       ${ds.extra.length ? `<p class="muted small">Extra (not scheduled, not scored): ${ds.extra.map((i) => esc(i.goal.name)).join(', ')}</p>` : ''}`);
   },

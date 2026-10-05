@@ -5,7 +5,7 @@ import { toCSV, validateImport, defaultState, saveState } from '../store.js';
 import { ENGINE_VERSION } from '../engine.js';
 import { esc, fmtDate, todayStr } from '../util.js';
 
-export const APP_VERSION = '1.6';
+export const APP_VERSION = '1.7';
 
 const isStandalone = () => matchMedia('(display-mode: standalone)').matches || navigator.standalone === true;
 
@@ -48,6 +48,8 @@ export function renderSettings() {
         <span class="inline-num"><input type="number" min="1" max="100" data-setting="goodDay" data-type="num" value="${esc(s.goodDay)}"><span class="unit">%</span></span></label>
       <label class="field"><span>Past days where nothing at all was logged count as</span>
         <select data-setting="unloggedDays">${opt('missed', s.unloggedDays, 'Missed — scheduled goals score 0 (default)')}${opt('untracked', s.unloggedDays, 'Not tracked — left out of averages')}</select></label>
+      <label class="field"><span>Most bonus points in one day</span>
+        <select data-setting="bonusCap">${[3, 5, 10, 15, 20].map((n) => opt(n, s.bonusCap ?? 10, `+${n}${n === 10 ? ' (default)' : ''}`)).join('')}${opt('none', s.bonusCap, 'No limit')}</select></label>
       <label class="check-field"><input type="checkbox" data-setting="includeToday" data-type="bool" ${s.includeToday ? 'checked' : ''}> Include today (still in progress) in averages</label>
     </section>
     <section class="card form">

@@ -23,6 +23,7 @@ export function defaultState() {
       theme: 'auto',
       reminderTime: '21:00',
       lastBackup: null,
+      bonusCap: 10,
     },
     categories: [],
     goals: [],

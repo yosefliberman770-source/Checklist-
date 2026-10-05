@@ -3,7 +3,7 @@
 // applies from a date the user picks, so history keeps its meaning.
 
 import { app, openSheet, closeSheet, toast, go, PALETTE } from '../ctx.js';
-import { WEIGHTS, applyVersion, evaluate, versionFor, isScheduled, hasTarget, totalModeAllowed, partsShareUnit } from '../engine.js';
+import { WEIGHTS, BONUS_SIZES, DEFAULT_BONUS_POINTS, DEFAULT_BONUS_CAP, applyVersion, evaluate, versionFor, isScheduled, hasTarget, totalModeAllowed, partsShareUnit } from '../engine.js';
 import { describe, pct, statusLabel } from '../format.js';
 import { sortedCats, catLabel, findCatByName, createCategory } from './categories.js';
 import { esc, uid, deepClone, DAY_SHORT, DAY_LONG, addDays, weekday, fmtDate } from '../util.js';
@@ -28,7 +28,7 @@ const TARGET_TYPES = [
 ];
 
 const MEANING_KEYS = ['kind', 'unit', 'precision', 'allowNegative', 'target', 'dayTargets', 'credit', 'cap',
-  'weight', 'scored', 'bonus', 'schedule', 'parts', 'partMode', 'partWeighting'];
+  'weight', 'scored', 'bonus', 'bonusPoints', 'schedule', 'parts', 'partMode', 'partWeighting'];
 
 function guessPreset(cfg) {
   if (cfg.kind === 'check') return 'check';
@@ -57,7 +57,7 @@ export function newDraft() {
     isNew: true, name: '', shortName: '', description: '', notes: '', icon: '', color: '', categoryId: '',
     pinned: false, step: '', start: app.today, end: '', preset: 'check',
     kind: 'check', unit: '', precision: 0, allowNegative: false, target: blankTarget(), dayTargets: {},
-    credit: 'partial', cap: 1, weight: 2, scored: true, bonus: false,
+    credit: 'partial', cap: 1, weight: 2, scored: true, bonus: false, bonusPoints: DEFAULT_BONUS_POINTS,
     schedule: { type: 'daily', days: [1, 2, 3, 4, 5], every: 2, anchor: '', dates: [] },
     parts: [], partMode: 'each', partWeighting: 'target', _newDate: app.today,
   };
@@ -85,6 +85,7 @@ export function draftFromGoal(goal) {
     const meta = (goal.parts || []).find((x) => x.id === p.partId) || {};
     return { ...p, name: meta.name || '', step: meta.step ?? '', target: { ...blankTarget(), ...(p.target || {}) } };
   });
+  if (!(Number(d.bonusPoints) > 0)) d.bonusPoints = DEFAULT_BONUS_POINTS;
   d.preset = guessPreset(d);
   return d;
 }
@@ -123,6 +124,7 @@ export function configFromDraft(d) {
     weight: Number(d.weight) > 0 ? Number(d.weight) : 2,
     scored: !!d.scored,
     bonus: !!d.scored && !!d.bonus,
+    ...(d.scored && d.bonus ? { bonusPoints: Number(d.bonusPoints) > 0 ? Number(d.bonusPoints) : DEFAULT_BONUS_POINTS } : {}),
     schedule: cleanSchedule(d.schedule),
     parts: [],
     partMode: 'each',
@@ -355,10 +357,9 @@ function summaryHtml(d) {
   if (scorable && validate({ ...d, name: d.name || 'x' }).length === 0) {
     const s = shareOfDay(d, cfg);
     const day = s ? (s.date === app.today ? 'today\'s' : DAY_LONG[weekday(s.date)] + '\'s') : '';
-    if (s && cfg.bonus) {
-      html += s.share == null
-        ? `<div class="muted small">No regular goals on ${day.replace('\'s', '')} yet, so there's nothing for this bonus to add to.</div>`
-        : `<div class="muted small">Can add up to about ${Math.round(s.share * 100)}% to ${day} score (never above 100%).</div>`;
+    if (cfg.bonus) {
+      const capS = app.state.settings.bonusCap;
+      html += `<div class="muted small">Adds +${cfg.bonusPoints} to your day score when done${capS === 'none' ? '' : ` (all bonuses together: at most +${capS ?? DEFAULT_BONUS_CAP} a day)`}. Skipping it costs nothing.</div>`;
     } else if (s) html += `<div class="muted small">Worth about ${Math.round(s.share * 100)}% of ${day} score.</div>`;
   }
   return html;
@@ -402,8 +403,11 @@ export function renderEditor() {
 
       <div class="field"><span>Which days?</span>${scheduleFields(d.schedule)}</div>
 
-      <div class="field"><span>How much does it matter?</span>${weightSeg('weight', d.weight)}
-        <p class="muted small">${d.bonus ? 'For a bonus goal this sets how much it can add.' : 'Each step counts twice as much as the one before. Only this affects your score — not the target or difficulty.'}</p></div>
+      ${d.scored && d.bonus ? `<div class="field"><span>Bonus worth</span>
+        <div class="seg">${BONUS_SIZES.map((n) => `<button type="button" class="${Number(d.bonusPoints) === n ? 'on' : ''}" data-a="edSet" data-path="bonusPoints" data-v="${n}">+${n}</button>`).join('')}</div>
+        <p class="muted small">Points added to your day (out of 100) when you do it.</p></div>`
+      : `<div class="field"><span>How much does it matter?</span>${weightSeg('weight', d.weight)}
+        <p class="muted small">Each step counts twice as much as the one before. Only this affects your score — not the target or difficulty.</p></div>`}
 
       ${scoreModeField(d)}
 
@@ -462,7 +466,7 @@ function scoreModeField(d) {
   const mode = !d.scored ? 'off' : d.bonus ? 'bonus' : 'counts';
   const help = {
     counts: 'Missing it lowers your day score.',
-    bonus: 'Doing it raises your day score; skipping it never lowers it. Your day still tops out at 100%.',
+    bonus: 'Doing it adds a few points to your day; skipping it never lowers it. Your day still tops out at 100%.',
     off: 'Tracked only — it shows in your stats but never affects your score.',
   }[mode];
   const btn = (m, l) => `<button type="button" class="${mode === m ? 'on' : ''}" data-a="edScoreMode" data-m="${m}">${l}</button>`;
@@ -675,10 +679,8 @@ export const editorActions = {
   edScoreMode(el) {
     const d = app.ui.draft;
     d.scored = el.dataset.m !== 'off';
-    const toBonus = el.dataset.m === 'bonus' && !d.bonus;
     d.bonus = el.dataset.m === 'bonus';
-    // Bonus goals start small; the user can raise it.
-    if (toBonus && Number(d.weight) === 2) d.weight = 1;
+    if (d.bonus && !(Number(d.bonusPoints) > 0)) d.bonusPoints = DEFAULT_BONUS_POINTS;
     app.render();
   },
   edCat(el) {

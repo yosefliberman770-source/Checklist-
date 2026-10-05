@@ -110,7 +110,7 @@ export function describe(cfg, { includeWeight = true } = {}) {
     (parts.length ? parts.some((p) => !p.optional && (p.kind === 'check' || p.target?.type !== 'none')) :
       cfg.kind === 'check' || cfg.target?.type !== 'none');
   if (!cfg.scored || !scoredPossible) bits.push('not in score');
-  else if (cfg.bonus) bits.push(`bonus${includeWeight ? ` (${weightLabel(cfg.weight)})` : ''} — only helps`);
+  else if (cfg.bonus) bits.push(`⭐ bonus +${Number(cfg.bonusPoints) > 0 ? cfg.bonusPoints : 2}`);
   else if (includeWeight) bits.push(`importance: ${weightLabel(cfg.weight)}`);
   return bits.join(' · ');
 }
