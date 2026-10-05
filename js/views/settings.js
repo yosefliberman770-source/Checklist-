@@ -5,7 +5,7 @@ import { toCSV, validateImport, defaultState, saveState } from '../store.js';
 import { ENGINE_VERSION } from '../engine.js';
 import { esc, fmtDate, todayStr } from '../util.js';
 
-export const APP_VERSION = '1.0.0';
+export const APP_VERSION = '1.6';
 
 const isStandalone = () => matchMedia('(display-mode: standalone)').matches || navigator.standalone === true;
 
@@ -75,13 +75,35 @@ export function renderSettings() {
     </section>
     <section class="card">
       <h3>About</h3>
-      <p class="small">My Day ${APP_VERSION} · scoring engine v${ENGINE_VERSION}. Your goals, your rules: the app only measures the system you design.</p>
+      <p class="small">My Day version ${APP_VERSION} · scoring engine v${ENGINE_VERSION}. Your goals, your rules: the app only measures the system you design.</p>
+      <button class="btn small" data-a="checkUpdate">Check for updates</button>
       <p class="muted small">${app.state.goals.length} goals · ${Object.keys(app.state.records).length} entries stored on this device.</p>
       <button class="btn small danger" data-a="wipe">Erase all data…</button>
     </section>`;
 }
 
 export const settingsActions = {
+  async checkUpdate(el) {
+    el.disabled = true;
+    el.textContent = 'Checking…';
+    try {
+      const reg = app.swReg || (await navigator.serviceWorker?.getRegistration());
+      if (reg) await reg.update();
+      // Fetch the newest version number straight from the site.
+      const res = await fetch(`./js/views/settings.js?check=${Date.now()}`, { cache: 'no-store' });
+      const latest = (await res.text()).match(/APP_VERSION = '([^']+)'/)?.[1];
+      if (latest && latest !== APP_VERSION) {
+        toast(`Updating to version ${latest}…`);
+        setTimeout(() => location.reload(), 900);
+        return;
+      }
+      toast('You have the latest version.');
+    } catch {
+      toast('Couldn\'t check — are you online?');
+    }
+    el.disabled = false;
+    el.textContent = 'Check for updates';
+  },
   async addReminder() {
     await saveFile('my-day-reminder.ics', icsReminder(app.state.settings.reminderTime), 'text/calendar');
   },

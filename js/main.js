@@ -117,18 +117,29 @@ function wire() {
   });
 }
 
+function showUpdateBanner() {
+  const el = document.getElementById('toast');
+  el.innerHTML = 'A new version is ready. <button class="link" onclick="location.reload()">Reload</button>';
+  el.hidden = false;
+}
+
 function registerSW() {
   if (!('serviceWorker' in navigator) || location.protocol === 'file:') return;
-  navigator.serviceWorker.register('./sw.js').then((reg) => {
-    reg.addEventListener('updatefound', () => {
-      const sw = reg.installing;
-      sw?.addEventListener('statechange', () => {
-        if (sw.state === 'installed' && navigator.serviceWorker.controller) {
-          const el = document.getElementById('toast');
-          el.innerHTML = 'A new version is ready. <button class="link" onclick="location.reload()">Reload</button>';
-          el.hidden = false;
-        }
-      });
+  const hadController = !!navigator.serviceWorker.controller;
+  let reloaded = false;
+  // When a new version takes over, switch to it right away — unless the user
+  // is in the middle of editing a goal, then just offer it.
+  navigator.serviceWorker.addEventListener('controllerchange', () => {
+    if (!hadController || reloaded) return;
+    if (app.ui.draft || !document.getElementById('sheet').hidden) { showUpdateBanner(); return; }
+    reloaded = true;
+    location.reload();
+  });
+  navigator.serviceWorker.register('./sw.js', { updateViaCache: 'none' }).then((reg) => {
+    app.swReg = reg;
+    // Look for a new version every time the app comes back to the screen.
+    document.addEventListener('visibilitychange', () => {
+      if (document.visibilityState === 'visible') reg.update().catch(() => {});
     });
   }).catch(() => {});
 }

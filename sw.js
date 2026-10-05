@@ -1,6 +1,8 @@
-// Offline support: serve the app from cache, refresh the cache in the
-// background. Bump VERSION whenever app files change.
-const VERSION = 'myday-v5';
+// Offline support. When online, always load the newest files from the
+// network (bypassing the browser's HTTP cache) and keep a copy; when offline
+// or the network is too slow, fall back to that copy. Bump VERSION whenever
+// app files change.
+const VERSION = 'myday-v6';
 const FILES = [
   './', './index.html', './manifest.webmanifest', './css/app.css',
   './js/main.js', './js/ctx.js', './js/store.js', './js/engine.js', './js/format.js', './js/util.js', './js/charts.js',
@@ -8,9 +10,13 @@ const FILES = [
   './js/views/history.js', './js/views/settings.js', './js/views/categories.js',
   './icons/icon.svg', './icons/icon-192.png', './icons/icon-512.png', './icons/apple-touch-icon.png',
 ];
+const NETWORK_TIMEOUT_MS = 4000;
 
 self.addEventListener('install', (e) => {
-  e.waitUntil(caches.open(VERSION).then((c) => c.addAll(FILES)).then(() => self.skipWaiting()));
+  // cache: 'reload' skips the HTTP cache so an update never stores stale files.
+  e.waitUntil(caches.open(VERSION)
+    .then((c) => c.addAll(FILES.map((u) => new Request(u, { cache: 'reload' }))))
+    .then(() => self.skipWaiting()));
 });
 
 self.addEventListener('activate', (e) => {
@@ -21,13 +27,21 @@ self.addEventListener('activate', (e) => {
 
 self.addEventListener('fetch', (e) => {
   const req = e.request;
-  if (req.method !== 'GET' || new URL(req.url).origin !== location.origin) return;
-  e.respondWith(caches.open(VERSION).then(async (cache) => {
-    const cached = await cache.match(req, { ignoreSearch: true });
-    const network = fetch(req).then((res) => {
-      if (res.ok) cache.put(req, res.clone());
+  const url = new URL(req.url);
+  if (req.method !== 'GET' || url.origin !== location.origin) return;
+  const key = req.mode === 'navigate' ? './index.html' : req;
+  e.respondWith((async () => {
+    const cache = await caches.open(VERSION);
+    const fromNetwork = fetch(url.href, { cache: 'no-cache' }).then((res) => {
+      if (res.ok) cache.put(key, res.clone());
       return res;
-    }).catch(() => cached);
-    return cached || network;
-  }));
+    });
+    const timeout = new Promise((resolve) => setTimeout(resolve, NETWORK_TIMEOUT_MS));
+    try {
+      const res = await Promise.race([fromNetwork, timeout]);
+      if (res) return res;
+    } catch { /* offline: use the saved copy */ }
+    const cached = await cache.match(key, { ignoreSearch: true });
+    return cached || fromNetwork;
+  })());
 });
