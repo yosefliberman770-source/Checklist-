@@ -29,6 +29,7 @@ export function defaultState() {
     records: {},
     days: {},
     collapsed: {},
+    plans: {},
   };
 }
 
@@ -92,6 +93,7 @@ export function migrate(s) {
   s.records ||= {};
   s.days ||= {};
   s.collapsed ||= {};
+  s.plans ||= {};
   s.schemaVersion = SCHEMA_VERSION;
   s.engineVersion ||= ENGINE_VERSION;
   // Empty the trash after 30 days.

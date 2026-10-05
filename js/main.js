@@ -7,23 +7,24 @@ import { renderToday, todayActions, todayChange, todayInput, todaySubmit } from 
 import { renderEditor, editorActions, editorSubmit, editorBind, newDraft, draftFromGoal, applyChoicePreset } from './views/editor.js';
 import { renderGoals, renderGoalDetail, goalActions, goalSubmit, goalListRow } from './views/goals.js';
 import { categoryActions, categorySubmit, renderCategoryPage } from './views/categories.js';
+import { renderPlan, planActions, planSubmit, planChange } from './views/plan.js';
 import { renderStats, statsActions, statsChange } from './views/stats.js';
 import { renderHistory, historyActions } from './views/history.js';
 import { renderSettings, settingsActions, settingsChange, applySetting, applyTheme } from './views/settings.js';
 
 const views = {
-  today: renderToday, history: renderHistory, stats: renderStats, goals: renderGoals,
+  today: renderToday, plan: renderPlan, history: renderHistory, stats: renderStats, goals: renderGoals,
   goal: renderGoalDetail, cat: () => renderCategoryPage({ goalListRow }), edit: renderEditor, new: renderEditor, settings: renderSettings,
 };
-const TAB_OF = { today: 'today', history: 'history', stats: 'stats', goals: 'goals', goal: 'goals', cat: 'goals', edit: 'goals', new: 'goals', settings: 'settings' };
+const TAB_OF = { today: 'today', plan: 'plan', history: 'history', stats: 'stats', goals: 'goals', goal: 'goals', cat: 'goals', edit: 'goals', new: 'goals', settings: 'settings' };
 
 const actions = {
-  ...todayActions, ...editorActions, ...goalActions, ...categoryActions, ...statsActions, ...historyActions, ...settingsActions,
+  ...todayActions, ...editorActions, ...goalActions, ...categoryActions, ...planActions, ...statsActions, ...historyActions, ...settingsActions,
   nav: (el) => go(el.dataset.href),
   closeSheet: () => closeSheet(),
 };
-const submits = { ...todaySubmit, ...editorSubmit, ...goalSubmit, ...categorySubmit };
-const changes = { ...todayChange, ...statsChange, ...settingsChange };
+const submits = { ...todaySubmit, ...editorSubmit, ...goalSubmit, ...categorySubmit, ...planSubmit };
+const changes = { ...todayChange, ...planChange, ...statsChange, ...settingsChange };
 
 function render() {
   const view = document.getElementById('view');
@@ -45,6 +46,7 @@ function onRoute() {
   const [route, param, extra] = h.split('/');
   const prevRoute = app.ui.route;
   if (!views[route]) { go('#today'); return; }
+  if (route === 'plan') app.ui.date = param && /^\d{4}-\d{2}-\d{2}$/.test(param) ? param : app.today;
   if (route === 'today') app.ui.date = param && /^\d{4}-\d{2}-\d{2}$/.test(param) ? (param > app.today ? app.today : param) : app.today;
   if (route === 'new' && !(app.ui.draft?.isNew)) {
     app.ui.draft = newDraft();

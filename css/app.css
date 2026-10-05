@@ -79,7 +79,7 @@ h3 { font-size: 1rem; }
   padding-bottom: env(safe-area-inset-bottom);
 }
 .tabbar a {
-  flex: 1; display: flex; flex-direction: column; align-items: center; gap: 2px;
+  flex: 1; min-width: 0; display: flex; flex-direction: column; align-items: center; gap: 2px;
   padding: 8px 0 6px; min-height: var(--tabbar-h);
   color: var(--muted); text-decoration: none; font-size: .72rem;
 }
@@ -377,6 +377,24 @@ form.inline { margin-top: 12px; flex-wrap: nowrap; }
 .cat-tag { display: inline-block; background: var(--surface-2); border-radius: 999px; padding: 0 8px; margin-right: 4px; font-size: .78rem; color: var(--text); }
 .back-cat { max-width: 40%; }
 .cat-actions { margin: 12px 0 14px; }
+
+/* ---------- plan ---------- */
+.plan-sum { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; }
+.plan-sum > div { display: flex; flex-direction: column; }
+.plan-sum b { font-size: 1.25rem; font-variant-numeric: tabular-nums; }
+.plan-warn { margin: 10px 0 0; background: var(--missed-soft); color: var(--missed); }
+.plan-row { display: flex; align-items: center; gap: 10px; background: var(--surface); border: 1px solid var(--line);
+  border-radius: var(--radius); padding: 8px 10px; margin-bottom: 8px; box-shadow: var(--shadow); }
+.plan-row.done { opacity: .55; }
+.plan-row.done .plan-name { text-decoration: line-through; }
+.plan-row.late { border-color: var(--missed); }
+.plan-main { flex: 1; min-width: 0; display: flex; flex-direction: column; align-items: flex-start; gap: 2px; background: none; border: 0; text-align: left; padding: 4px 2px; min-height: 44px; }
+.plan-name { font-weight: 600; overflow-wrap: anywhere; }
+.plan-meta { font-size: .85rem; color: var(--muted); }
+.plan-slot { font-size: .8rem; color: var(--accent); font-weight: 600; }
+.plan-late { font-size: .8rem; color: var(--missed); font-weight: 600; }
+.check.small { width: 38px; height: 38px; font-size: 1.05rem; }
+.dur-input.small input { font-size: 1.3rem; width: 4.5ch; }
 
 /* ---------- goals list ---------- */
 .list-row { padding: 6px 8px; }

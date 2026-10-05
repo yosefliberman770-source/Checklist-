@@ -2,12 +2,12 @@
 // network (bypassing the browser's HTTP cache) and keep a copy; when offline
 // or the network is too slow, fall back to that copy. Bump VERSION whenever
 // app files change.
-const VERSION = 'myday-v14';
+const VERSION = 'myday-v15';
 const FILES = [
   './', './index.html', './manifest.webmanifest', './css/app.css',
   './js/main.js', './js/ctx.js', './js/store.js', './js/engine.js', './js/format.js', './js/util.js', './js/charts.js',
   './js/views/today.js', './js/views/editor.js', './js/views/goals.js', './js/views/stats.js',
-  './js/views/history.js', './js/views/settings.js', './js/views/categories.js',
+  './js/views/history.js', './js/views/settings.js', './js/views/categories.js', './js/views/plan.js',
   './icons/icon.svg', './icons/icon-192.png', './icons/icon-512.png', './icons/apple-touch-icon.png',
 ];
 const NETWORK_TIMEOUT_MS = 4000;
