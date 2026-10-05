@@ -51,6 +51,8 @@ you pick. It works even when the app is closed; delete the event to stop it.
 - **Day score** = weighted average of each scheduled goal's credit (0–100%). Unscheduled goals never
   count as failures; excused goals and skipped days are left out; a missing entry is a miss — never a 0
   value that accidentally "meets" a *no more than* goal. Tap the score for the exact breakdown.
+- **Consistency.** Stats ranks your goals from most to least consistent (how often each was met on its
+  scheduled days), shows whether each is improving or slipping, and each goal's page shows its rank.
 - **History stays honest.** Changing what a goal means asks *from when* it applies. Past days keep the
   settings they had, so old scores never silently change.
 

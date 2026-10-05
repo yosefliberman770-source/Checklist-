@@ -1,7 +1,7 @@
 // Goal list, categories, and a goal's own page (stats, history, lifecycle).
 
 import { app, openSheet, closeSheet, toast, go, goalColor } from '../ctx.js';
-import { inPause, periodStats, goalDay, partsShareUnit, effectiveTarget } from '../engine.js';
+import { inPause, periodStats, consistencyRanking, goalDay, partsShareUnit, effectiveTarget } from '../engine.js';
 import { describe, fmtValue, pct, targetText, weightLabel, scheduleText, statusLabel } from '../format.js';
 import { esc, uid, addDays, fmtDate, dateRange } from '../util.js';
 import { countRecords, deleteGoalForever } from '../store.js';
@@ -146,6 +146,9 @@ export function renderGoalDetail() {
   const range = periodRange(app.ui.period);
   const ps = periodStats(state, range.from, range.to, app.today);
   const gs = ps.goals.find((x) => x.goal.id === goal.id);
+  const cons = consistencyRanking(ps);
+  const rankIdx = cons.rows.filter((r) => r.enough).findIndex((r) => r.goal.id === goal.id);
+  const rankCount = cons.rows.filter((r) => r.enough).length;
   const dates = range.to >= range.from ? dateRange(range.from, ps.end < range.from ? range.from : ps.end) : [];
   const items = dates.map((d) => goalDay(goal, d, state.records, app.today));
   const cat = state.categories.find((c) => c.id === goal.categoryId);
@@ -224,6 +227,7 @@ export function renderGoalDetail() {
     <div class="tiles">
       <div class="tile"><div class="tile-num">${gs?.completion != null ? pct(gs.completion) : '—'}</div><div class="tile-label">Met (${gs ? `${gs.met} of ${gs.scheduled}` : '0'})</div></div>
       <div class="tile"><div class="tile-num">${gs?.avgCredit != null ? pct(gs.avgCredit) : '—'}</div><div class="tile-label">Average progress</div></div>
+      ${rankCount > 1 ? `<div class="tile"><div class="tile-num">${rankIdx >= 0 ? `#${rankIdx + 1}<span class="of">/${rankCount}</span>` : '—'}</div><div class="tile-label">${rankIdx === 0 ? 'Your most consistent goal' : rankIdx === rankCount - 1 ? 'Your least consistent goal' : rankIdx >= 0 ? 'Consistency rank' : 'Not enough days to rank'}</div></div>` : ''}
       ${measure ? `<div class="tile"><div class="tile-num">${gs?.avgValue != null ? esc(fmtValue(gs.avgValue, measure)) : '—'}</div><div class="tile-label">Average logged</div></div>
       <div class="tile"><div class="tile-num">${gs?.values?.length ? esc(fmtValue(gs.total, measure)) : '—'}</div><div class="tile-label">Total</div></div>` : ''}
       ${v.scored ? `<div class="tile"><div class="tile-num">${gs ? gs.lost.toFixed(1) : '—'}</div><div class="tile-label">Points lost / day</div></div>` : ''}

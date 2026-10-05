@@ -1,7 +1,7 @@
 // Statistics for a period, and the shared period picker.
 
 import { app } from '../ctx.js';
-import { periodStats } from '../engine.js';
+import { periodStats, consistencyRanking } from '../engine.js';
 import { pct, pct100 } from '../format.js';
 import { esc, addDays, startOfWeek, startOfMonth, fmtDate, diffDays, DAY_SHORT } from '../util.js';
 import { hbars } from '../charts.js';
@@ -59,7 +59,6 @@ export function renderStats() {
   const thr = Number(state.settings.goodDay) || 80;
 
   const lost = ps.goals.filter((g) => g.lost > 0.05).sort((a, b) => b.lost - a.lost);
-  const goalRows = ps.goals.filter((g) => g.scheduled || g.excused).sort((a, b) => (a.goal.order ?? 0) - (b.goal.order ?? 0));
   const wdOrder = state.settings.weekStart === 0 ? [0, 1, 2, 3, 4, 5, 6] : [1, 2, 3, 4, 5, 6, 0];
 
   return `<div class="topbar"><h1>Stats</h1></div>
@@ -73,26 +72,40 @@ export function renderStats() {
     <p class="muted small">${coverageLine(ps)}</p>
     ${ps.changes.length ? `<div class="notice small">Your system changed during this period: ${ps.changes.slice(0, 5).map((c) => `${esc(c.goal.name)} (${fmtDate(c.date, { weekday: false })})`).join(', ')}${ps.changes.length > 5 ? '…' : ''}. Each day is still scored with the settings it had.</div>` : ''}
 
+    ${consistencyCard(consistencyRanking(ps, prev), len)}
+
     <section class="card"><h3>Where your points went</h3>
       ${lost.length ? `<p class="muted small">Average points lost per day, by goal. Fixing the top one moves your score the most.</p>
         ${hbars(lost.map((g) => ({ label: `${esc(g.goal.icon || '')} ${esc(g.goal.name)}`, value: g.lost, href: `#goal/${g.goal.id}` })), { fmt: (v) => v.toFixed(1) })}`
         : '<p class="muted small">No points lost in this period. 🎯</p>'}
     </section>
 
-    <section class="card"><h3>Goals</h3>
-      ${goalRows.length ? `<table class="tbl">
-        <thead><tr><th>Goal</th><th class="num">Met</th><th class="num">Progress</th></tr></thead>
-        <tbody>${goalRows.map((g) => `<tr data-a="nav" data-href="#goal/${g.goal.id}" class="clickable">
-          <td>${esc(g.goal.icon || '')} ${esc(g.goal.name)}${g.excused ? ` <span class="muted small">${g.excused} excused</span>` : ''}</td>
-          <td class="num">${g.completion != null ? pct(g.completion) : '—'}<div class="muted small">${g.met}/${g.scheduled}</div></td>
-          <td class="num">${g.avgCredit != null ? pct(g.avgCredit) : '—'}</td></tr>`).join('')}</tbody></table>
-        <p class="muted small">Met = days the target was reached ÷ days it was scheduled. Progress = average credit, including partial days.</p>`
-        : '<p class="muted small">Nothing was scheduled in this period.</p>'}
-    </section>
-
     <section class="card"><h3>By day of the week</h3>
       ${ps.scoredDays ? hbars(wdOrder.map((wd) => ({ label: DAY_SHORT[wd], value: ps.weekdayAvg[wd] ?? 0 })), { max: 100, fmt: (v) => (v ? `${Math.round(v)}%` : '—') }) : '<p class="muted small">No scored days yet.</p>'}
     </section>`;
+}
+
+const TIER = { strong: 'Very consistent', mixed: 'On and off', weak: 'Inconsistent', few: 'Not enough data yet' };
+
+export function consistencyCard(c, len) {
+  if (!c.rows.length) return '';
+  const name = (r) => `${esc(r.goal.icon || '')} ${esc(r.goal.name)}`;
+  const headline = c.most ? `<div class="cons-headline">
+      <a class="cons-pill strong" href="#goal/${c.most.goal.id}"><span class="muted small">Most consistent</span><b>${name(c.most)}</b><span>${pct(c.most.rate)} of scheduled days</span></a>
+      ${c.least && c.least.rate < c.most.rate ? `<a class="cons-pill ${c.least.tier}" href="#goal/${c.least.goal.id}"><span class="muted small">Least consistent</span><b>${name(c.least)}</b><span>${pct(c.least.rate)} of scheduled days</span></a>` : ''}
+    </div>` : '';
+  const rows = c.rows.map((r) => {
+    const delta = r.delta == null || Math.abs(r.delta) < 0.005 ? ''
+      : `<span class="${r.delta > 0 ? 'up' : 'down'}">${r.delta > 0 ? '▲' : '▼'}${Math.round(Math.abs(r.delta) * 100)}</span>`;
+    return `<div class="cons-row" data-a="nav" data-href="#goal/${r.goal.id}">
+      <div class="cons-top"><span class="cons-name">${name(r)}</span><span class="cons-val">${pct(r.rate)} ${delta}</span></div>
+      <div class="hbar-track"><div class="hbar-fill tier-${r.tier}" style="width:${(r.rate * 100).toFixed(1)}%"></div></div>
+      <div class="muted small">${TIER[r.tier]} · met ${r.met} of ${r.scheduled} scheduled day${r.scheduled === 1 ? '' : 's'}${r.avgCredit != null && r.avgCredit - r.rate > 0.1 ? ` · ${pct(r.avgCredit)} average progress` : ''}</div>
+    </div>`;
+  }).join('');
+  return `<section class="card"><h3>Consistency</h3>
+    <p class="muted small">How often you met each goal on the days it was scheduled (excused days left out). ▲▼ = change vs the previous ${len} days.</p>
+    ${headline}${rows}</section>`;
 }
 
 export const statsActions = {

@@ -346,6 +346,24 @@ form.inline { margin-top: 12px; flex-wrap: nowrap; }
 .changes li { margin: 6px 0; }
 .note-row { padding: 6px 0; border-bottom: 1px solid var(--line); font-size: .92rem; }
 
+/* ---------- consistency ---------- */
+.cons-headline { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; margin: 8px 0 12px; }
+.cons-pill { display: flex; flex-direction: column; gap: 2px; padding: 10px 12px; border-radius: 12px; text-decoration: none; color: var(--text); background: var(--surface-2); }
+.cons-pill.strong { background: var(--met-soft); }
+.cons-pill.weak { background: var(--missed-soft); }
+.cons-pill.mixed { background: var(--partial-soft); }
+.cons-pill b { overflow-wrap: anywhere; }
+.cons-pill span:last-child { font-size: .83rem; }
+.cons-row { padding: 8px 0; border-top: 1px solid var(--line); cursor: pointer; }
+.cons-top { display: flex; justify-content: space-between; gap: 8px; margin-bottom: 4px; }
+.cons-name { font-weight: 600; overflow-wrap: anywhere; }
+.cons-val { font-variant-numeric: tabular-nums; white-space: nowrap; font-weight: 600; }
+.cons-val .up, .cons-val .down { font-size: .8rem; margin-left: 4px; }
+.hbar-fill.tier-strong { background: var(--met); }
+.hbar-fill.tier-mixed { background: var(--partial); }
+.hbar-fill.tier-weak { background: var(--missed); }
+.hbar-fill.tier-few { background: var(--excused); }
+
 /* ---------- charts ---------- */
 .chart { width: 100%; height: auto; display: block; overflow: visible; }
 .chart .grid { stroke: var(--line); stroke-width: 1; }

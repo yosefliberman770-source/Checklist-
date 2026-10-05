@@ -360,6 +360,27 @@ export function periodStats(state, from, to, today) {
   };
 }
 
+// Rank goals by how often they were met on the days they were scheduled
+// (excused days left out). Goals with fewer than `minDays` scheduled days are
+// listed last as "not enough data" rather than judged.
+export function consistencyRanking(ps, prevPs = null, minDays = 3) {
+  const prevById = Object.fromEntries((prevPs?.goals || []).map((g) => [g.goal.id, g]));
+  const tier = (r) => (r >= 0.8 ? 'strong' : r >= 0.5 ? 'mixed' : 'weak');
+  const rows = ps.goals.filter((g) => g.scheduled > 0).map((g) => {
+    const p = prevById[g.goal.id];
+    const enough = g.scheduled >= minDays;
+    const prevRate = p && p.scheduled >= minDays ? p.met / p.scheduled : null;
+    return {
+      goal: g.goal, met: g.met, scheduled: g.scheduled, rate: g.met / g.scheduled, avgCredit: g.avgCredit,
+      enough, tier: enough ? tier(g.met / g.scheduled) : 'few',
+      prevRate, delta: enough && prevRate != null ? g.met / g.scheduled - prevRate : null,
+    };
+  });
+  rows.sort((a, b) => (b.enough - a.enough) || (b.rate - a.rate) || ((b.avgCredit ?? 0) - (a.avgCredit ?? 0)) || (b.scheduled - a.scheduled));
+  const ranked = rows.filter((r) => r.enough);
+  return { rows, most: ranked[0] || null, least: ranked.length > 1 ? ranked[ranked.length - 1] : null };
+}
+
 // Rolling average over the previous n days that have a score.
 export function rolling(points, n = 7) {
   return points.map((p, idx) => {

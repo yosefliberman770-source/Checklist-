@@ -209,3 +209,26 @@ test('period average is the mean of daily scores', () => {
   assert.equal(p.scoredDays, 4);
   assert.equal(p.goals[0].completion, 0.5);
 });
+
+test('consistency ranking: most to least consistent, with too-little-data last', async () => {
+  const { consistencyRanking } = await import('../js/engine.js');
+  const a = goal('a', { kind: 'check' });
+  const b = goal('b', { kind: 'check' });
+  const c = goal('c', { kind: 'check', schedule: { type: 'dates', dates: ['2026-10-02'] } });
+  const recs = {};
+  for (const d of ['2026-10-01', '2026-10-02', '2026-10-03', '2026-10-04']) recs[recKey(d, 'a')] = rec(true);
+  recs[recKey('2026-10-01', 'b')] = rec(true);
+  recs[recKey('2026-10-02', 'b')] = rec(null, 'excused');
+  recs[recKey('2026-10-02', 'c')] = rec(true);
+  const s = st([a, b, c], recs);
+  const p = periodStats(s, '2026-10-01', '2026-10-04', TODAY);
+  const prev = periodStats(s, '2026-09-27', '2026-09-30', TODAY);
+  const r = consistencyRanking(p, prev);
+  assert.deepEqual(r.rows.map((x) => x.goal.id), ['a', 'b', 'c']);
+  assert.equal(r.most.goal.id, 'a');
+  assert.equal(r.least.goal.id, 'b');
+  close(r.rows[1].rate, 1 / 3); // excused day left out
+  assert.equal(r.rows[2].tier, 'few');
+  assert.equal(r.rows[0].tier, 'strong');
+  close(r.rows[0].delta, 1); // 0% in the previous 4 days → 100% now
+});
