@@ -222,12 +222,18 @@ export function renderToday() {
       <div class="score-text"><div class="score-big">${scoreMain}</div><div class="score-sub">${esc(scoreSub)}</div>
       ${ds.score != null ? '<div class="score-hint">Tap for breakdown</div>' : ''}</div>
     </button>
+    <div class="row-btns add-row compact">
+      <button class="btn primary small" data-a="nav" data-href="#new">+ Goal</button>
+      <button class="btn small" data-a="catNew">+ Category</button>
+      <button class="btn small" data-a="nav" data-href="#goals">Manage</button>
+    </div>
     ${ds.skipped ? `<div class="notice">This day is skipped and left out of your averages. <button class="link" data-a="skipDay" ${ro}>Undo</button></div>` : ''}
     ${groups.map((gr) => `
       <section class="group">
-        ${gr.name ? `<button class="group-head${isCollapsed(gr) ? '' : ' open'}" data-a="collapse" data-id="${gr.id}" data-closed="${isCollapsed(gr) ? 1 : 0}" aria-expanded="${!isCollapsed(gr)}">
+        ${gr.name ? `<div class="group-head-wrap"><button class="group-head${isCollapsed(gr) ? '' : ' open'}" data-a="collapse" data-id="${gr.id}" data-closed="${isCollapsed(gr) ? 1 : 0}" aria-expanded="${!isCollapsed(gr)}">
           <span>${isCollapsed(gr) ? '▸' : '▾'} ${gr.id === '_pinned' || gr.id === '_unc' || gr.id === '_all' ? esc(gr.name) : gr.name}</span>
-          <span class="group-count">${groupCount(gr.items)}</span></button>` : ''}
+          <span class="group-count">${groupCount(gr.items)}</span></button>
+          ${gr.id === '_pinned' || gr.id === '_all' ? '' : `<button class="cat-go" data-a="nav" data-href="#cat/${gr.id === '_unc' ? 'none' : gr.id}" aria-label="Open category: add or edit its goals">›</button>`}</div>` : ''}
         ${isCollapsed(gr) ? '' : gr.items.map((i) => goalRow(i, ro)).join('')}
       </section>`).join('')}
     ${!ds.items.length ? '<p class="muted center">No goals are scheduled for this day.</p>' : ''}
@@ -309,7 +315,8 @@ function openEntry(goalId, partId) {
         <button type="button" class="btn" data-a="entryExcuse">${excused ? 'Un-excuse' : 'Excuse'}</button>
         <button type="button" class="btn danger-text" data-a="entryClear">Clear</button>
       </div>
-    </form>`);
+    </form>
+    <div class="center"><button class="link small" data-a="nav" data-href="#goal/${goal.id}">Edit goal · see its history ›</button></div>`);
   updatePreview();
 }
 
@@ -356,7 +363,8 @@ function openChoiceSheet(goal, date) {
         <button type="button" class="btn" data-a="choiceExcuse" data-g="${goal.id}">${excused ? 'Un-excuse' : 'Excuse'}</button>
         <button type="button" class="btn danger-text" data-a="choiceClear" data-g="${goal.id}">Clear</button>
       </div>
-    </form>`);
+    </form>
+    <div class="center"><button class="link small" data-a="nav" data-href="#goal/${goal.id}">Edit goal · see its history ›</button></div>`);
 }
 
 function openParentSheet(goal, date) {
@@ -374,7 +382,8 @@ function openParentSheet(goal, date) {
         <button type="button" class="btn" data-a="fillAll" data-g="${goal.id}">✓ Fill all parts</button>
         <button type="button" class="btn" data-a="entryExcuse">${excused ? 'Un-excuse' : 'Excuse whole goal'}</button>
       </div>
-    </form>`);
+    </form>
+    <div class="center"><button class="link small" data-a="nav" data-href="#goal/${goal.id}">Edit goal · see its history ›</button></div>`);
 }
 
 function readEntry(form) {

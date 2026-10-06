@@ -16,7 +16,7 @@ const views = {
   today: renderToday, plan: renderPlan, history: renderHistory, stats: renderStats, goals: renderGoals,
   goal: renderGoalDetail, cat: () => renderCategoryPage({ goalListRow }), edit: renderEditor, new: renderEditor, settings: renderSettings,
 };
-const TAB_OF = { today: 'today', plan: 'plan', history: 'history', stats: 'stats', goals: 'goals', goal: 'goals', cat: 'goals', edit: 'goals', new: 'goals', settings: 'settings' };
+const TAB_OF = { today: 'today', plan: 'plan', history: 'history', stats: 'stats', goals: 'today', goal: 'today', cat: 'today', edit: 'today', new: 'today', settings: 'settings' };
 
 const actions = {
   ...todayActions, ...editorActions, ...goalActions, ...categoryActions, ...planActions, ...statsActions, ...historyActions, ...settingsActions,
@@ -56,7 +56,7 @@ function onRoute() {
   }
   if (route === 'edit') {
     const g = app.state.goals.find((x) => x.id === param);
-    if (!g) { go('#goals'); return; }
+    if (!g) { go('#today'); return; }
     if (!app.ui.draft || app.ui.draft.id !== param) app.ui.draft = draftFromGoal(g);
   }
   if (route !== 'edit' && route !== 'new') app.ui.draft = null;

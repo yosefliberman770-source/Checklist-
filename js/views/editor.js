@@ -357,7 +357,7 @@ function previewHtml(d) {
 
 export function renderEditor() {
   const d = app.ui.draft;
-  if (!d) { go('#goals'); return ''; }
+  if (!d) { go('#today'); return ''; }
   const isChoice = d.partMode === 'best';
   const hasParts = d.parts.length > 0 && !isChoice;
   const sameUnit = partsShareUnit(d.parts);
@@ -571,9 +571,10 @@ function applyPresentation(goal, d) {
 
 function finish(goal) {
   const back = app.ui.draft?._returnTo;
+  const wasNew = !!app.ui.draft?.isNew;
   app.ui.draft = null;
   app.save();
-  go(back || `#goal/${goal.id}`);
+  go(back || (wasNew ? '#today' : `#goal/${goal.id}`));
 }
 
 function doSave() {
@@ -639,7 +640,7 @@ export const editorActions = {
   edCancel() {
     const d = app.ui.draft;
     app.ui.draft = null;
-    go(d?._returnTo || (d && !d.isNew ? `#goal/${d.id}` : '#goals'));
+    go(d?._returnTo || (d && !d.isNew ? `#goal/${d.id}` : '#today'));
   },
   edSave() { doSave(); },
   edSet(el) {

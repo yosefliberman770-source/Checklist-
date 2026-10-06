@@ -44,6 +44,8 @@ you pick. It works even when the app is closed; delete the event to stop it.
   your own unit), or *time*. Targets can be *at least*, *no more than*, *between*, *exactly*, or none.
 - **Log what really happened.** Tap **✓ Done** to fill in the target, then adjust with − / + or tap the
   value to type the exact amount — under or over the target.
+- **One Goals screen** (middle tab): today's checklist plus + Goal, + Category and Manage. Each category
+  heading has a › to open it; tapping a goal lets you log it, with an *Edit goal* link for its settings.
 - **A simple checklist.** Each day shows **X of Y done** — every task counts the same. A number or time
   task counts as done once its target is reached (partial progress is shown but doesn't check it off).
   Excused tasks and skipped days are left out; History and Stats show how much you got done and how

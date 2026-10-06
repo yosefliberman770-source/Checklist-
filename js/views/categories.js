@@ -98,7 +98,7 @@ export const categoryActions = {
     for (const g of app.state.goals) if (g.categoryId === c.id) g.categoryId = null;
     app.save();
     toast('Category deleted');
-    if (app.ui.route === 'cat') { closeSheet(); location.hash = '#goals'; } else { app.render(); openCategoryList(); }
+    if (app.ui.route === 'cat') { closeSheet(); location.hash = '#today'; } else { app.render(); openCategoryList(); }
   },
 };
 
@@ -162,7 +162,7 @@ export function renderCategoryPage({ goalListRow }) {
   const id = app.ui.param;
   const isNone = id === 'none';
   const c = isNone ? null : app.state.categories.find((x) => x.id === id);
-  if (!isNone && !c) return `<div class="topbar"><button class="link" data-a="nav" data-href="#goals">‹ Goals</button></div><p class="muted center">This category no longer exists.</p>`;
+  if (!isNone && !c) return `<div class="topbar"><button class="link" data-a="nav" data-href="#today">‹ Goals</button></div><p class="muted center">This category no longer exists.</p>`;
   const catId = isNone ? '' : c.id;
   const byOrder = (a, b) => (a.order ?? 0) - (b.order ?? 0);
   const goals = app.state.goals.filter((g) => g.state === 'active' && (g.categoryId || '') === catId).sort(byOrder);
@@ -174,7 +174,7 @@ export function renderCategoryPage({ goalListRow }) {
   const avg = mean(ps.days.map((d) => catDayScore(d, catId)).filter((x) => x != null));
   const others = app.state.goals.filter((g) => g.state !== 'trash' && (g.categoryId || '') !== catId);
   const itemFor = (g) => ds.all.find((i) => i.goal.id === g.id);
-  return `<div class="topbar"><button class="link" data-a="nav" data-href="#goals">‹ Goals</button>
+  return `<div class="topbar"><button class="link" data-a="nav" data-href="#today">‹ Goals</button>
       <span></span>
       ${c ? `<button class="btn small" data-a="catOpen" data-id="${c.id}" data-list="0">Edit</button>` : '<span></span>'}</div>
     <section class="cat-hero" style="--cc:${c ? catColor(c) : 'var(--excused)'}">

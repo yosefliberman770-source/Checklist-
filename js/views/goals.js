@@ -70,7 +70,7 @@ export function renderGoals() {
   } else {
     body = active.length ? `<section class="group">${active.map((g, i) => goalListRow(g, active, i, { scope: 'all', showCat: true, item: ds.all.find((x) => x.goal.id === g.id) })).join('')}</section>` : '';
   }
-  return `<div class="topbar"><h1>Goals</h1></div>
+  return `<div class="topbar"><button class="link" data-a="nav" data-href="#today">‹ Back</button><h1>Manage goals</h1><span></span></div>
     <div class="seg view-toggle" role="tablist">
       <button class="${view === 'categories' ? 'on' : ''}" data-a="goalsView" data-v="categories" role="tab">Categories</button>
       <button class="${view === 'all' ? 'on' : ''}" data-a="goalsView" data-v="all" role="tab">All goals</button>
@@ -143,7 +143,7 @@ function occurrenceStrip(items) {
 export function renderGoalDetail() {
   const { state } = app;
   const goal = state.goals.find((g) => g.id === app.ui.param);
-  if (!goal) return `<div class="topbar"><button class="link" data-a="nav" data-href="#goals">‹ Goals</button></div><p class="muted center">This goal no longer exists.</p>`;
+  if (!goal) return `<div class="topbar"><button class="link" data-a="nav" data-href="#today">‹ Goals</button></div><p class="muted center">This goal no longer exists.</p>`;
   const v = goal.versions[goal.versions.length - 1];
   const range = periodRange(app.ui.period);
   const ps = periodStats(state, range.from, range.to, app.today);
@@ -210,7 +210,7 @@ export function renderGoalDetail() {
 
   const versions = goal.versions.map((ver, i) => ({ ver, prev: goal.versions[i - 1] })).reverse();
 
-  return `<div class="topbar">${cat ? `<button class="link ellipsis back-cat" data-a="nav" data-href="#cat/${cat.id}">‹ ${esc(cat.name)}</button>` : '<button class="link" data-a="nav" data-href="#goals">‹ Goals</button>'}
+  return `<div class="topbar">${cat ? `<button class="link ellipsis back-cat" data-a="nav" data-href="#cat/${cat.id}">‹ ${esc(cat.name)}</button>` : '<button class="link" data-a="nav" data-href="#today">‹ Goals</button>'}
       <h1 class="ellipsis">${esc(goal.icon || '')} ${esc(goal.name)}</h1>
       ${isTrash ? '<span></span>' : `<button class="btn small" data-a="nav" data-href="#edit/${goal.id}">Edit</button>`}</div>
     <section class="card summary-box" style="--gc:${goalColor(goal, state.goals.indexOf(goal))}">
@@ -322,7 +322,7 @@ export const goalActions = {
       if (!confirm(`Delete "${g.name}"? It has no logged entries.`)) return;
       deleteGoalForever(app.state, g.id);
       app.save();
-      go('#goals');
+      go('#today');
       return;
     }
     if (!confirm(`Move "${g.name}" to the trash?\n\nIts ${n} entries will stop counting and past day scores will change. Tip: "Archive" stops tracking but keeps history.\n\nIt's deleted for good after 30 days.`)) return;
@@ -330,7 +330,7 @@ export const goalActions = {
     g.state = 'trash';
     g.trashedOn = app.today;
     app.save();
-    go('#goals');
+    go('#today');
   },
   goalUntrash() {
     const g = findGoal();
@@ -344,7 +344,7 @@ export const goalActions = {
     if (!confirm(`Delete "${g.name}" and all ${countRecords(app.state, g.id)} entries forever? This can't be undone.`)) return;
     deleteGoalForever(app.state, g.id);
     app.save();
-    go('#goals');
+    go('#today');
   },
 };
 
